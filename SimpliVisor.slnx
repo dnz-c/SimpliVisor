@@ -1,0 +1,12 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="SimpliVisor/SimpliVisor.vcxproj">
+    <Deploy />
+  </Project>
+  <Project Path="SimpliVisorUser/SimpliVisorUser.vcxproj" Id="33770282-ff6a-492a-9f4b-30dcf603d9a7">
+    <Platform Project="x64" />
+  </Project>
+</Solution>
