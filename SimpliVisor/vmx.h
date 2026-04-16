@@ -4,15 +4,19 @@
 #include <intrin.h>
 #include <cmath>
 
-extern "C" {
-    PHYSICAL_ADDRESS MmGetPhysicalAddress(PVOID BaseAddress);
-}
-
 #define IA32_FEATURE_CONTROL 0x3A
 #define IA32_VMX_BASIC 0x480
 #define IA32_VMX_CR4_FIXED0 0x488
 #define IA32_VMX_CR4_FIXED1 0x489
+
 #define VMXON_TAG 'xmV '
+
+extern "C" {
+    PHYSICAL_ADDRESS MmGetPhysicalAddress(PVOID BaseAddress);
+
+    bool asm_virtualize_core(int core);
+    void asm_vmx_restore_state(void);
+}
 
 typedef union _IA32_VMX_BASIC_MSR
 {
@@ -45,5 +49,7 @@ bool reserve_vmcs_region(int core);
 bool free_vmxon_region(int core);
 bool free_vmcs_region(int core);
 
-bool enter_vmx_operation(int core);
+extern "C" bool enter_vmx_operation(int core, UINT64 rsp);
 bool exit_vmx_operation(int core);
+
+void setup_vmcs(int core, int rsp);

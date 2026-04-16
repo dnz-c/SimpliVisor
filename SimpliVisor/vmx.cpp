@@ -1,5 +1,6 @@
 #include "vmx.h"
 #include "driver.h"
+#include "vmcs.h"
 
 bool vmx_supported()
 {
@@ -114,10 +115,12 @@ bool free_vmcs_region(int core)
 	return TRUE;
 }
 
-bool enter_vmx_operation(int core)
+bool enter_vmx_operation(int core, UINT64 rsp)
 {
+	DbgPrint("Guest RSP: %#x\n", rsp);
+
 	DbgPrint("Allocating 16KB host stack...\n");
-	g_vcpus[core].host_stack = (UINT64)ExAllocatePool(NonPagedPool, 0x4000); // stack used on vmexit
+	g_vcpus[core].host_stack = (UINT64) ExAllocatePool(NonPagedPool, 0x4000) + 0x4000; // stack used on vmexit
 
 	DbgPrint("Enabling VMX Operations...");
 	UINT64 cr4 = __readcr4();
@@ -137,7 +140,14 @@ bool enter_vmx_operation(int core)
 		return FALSE;
 	}
 
-	DbgPrint("__vmx_on succeded on core: %ull\n", KeQueryActiveProcessors());
+	DbgPrint("__vmx_on succeded on core: %ull\n", core);
+
+	DbgPrint("Setting up vmcs structure...\n");
+	__vmx_vmclear(&g_vcpus[core].p_vmcs_region);
+	__vmx_vmptrld(&g_vcpus[core].p_vmcs_region);
+	DbgPrint("VMCS loaded into core...\n");
+	
+	setup_vmcs(core, rsp);
 
 	return TRUE;
 }
@@ -147,4 +157,13 @@ bool exit_vmx_operation(int core)
 	__vmx_off();
 	DbgPrint("__vmx_off succeded on core: %ull\n", core);
 	return TRUE;
+}
+
+void setup_vmcs(int core, int rsp)
+{
+	__vmx_vmwrite(GUEST_RSP, rsp);
+	__vmx_vmwrite(GUEST_RIP, (size_t)asm_vmx_restore_state);
+	__vmx_vmwrite(GUEST_CR3, __readcr3());
+	
+	__vmx_vmwrite(HOST_RSP, g_vcpus[core].host_stack);
 }

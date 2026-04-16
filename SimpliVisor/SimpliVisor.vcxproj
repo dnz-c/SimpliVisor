@@ -133,6 +133,14 @@
     <ClInclude Include="driver.h" />
     <ClInclude Include="vmx.h" />
   </ItemGroup>
+  <ItemGroup>
+    <MASM Include="asm_vmx.asm">
+      <TreatWarningsAsErrors Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</TreatWarningsAsErrors>
+      <TreatWarningsAsErrors Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</TreatWarningsAsErrors>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </MASM>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

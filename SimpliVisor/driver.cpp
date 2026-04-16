@@ -33,6 +33,8 @@ void run_on_single_core(function_t func, int core)
 
 NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 {
+	UNREFERENCED_PARAMETER(DeviceObject);
+
 	NTSTATUS status = STATUS_SUCCESS;
 	PIO_STACK_LOCATION stackLocation = NULL;
 	stackLocation = IoGetCurrentIrpStackLocation(Irp);
@@ -48,7 +50,7 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	g_vcpus = (VCPU*) ExAllocatePool(NonPagedPool, processor_count * sizeof(VCPU));
 
 	allocate_vmx_regions();
-	run_on_all_cores(enter_vmx_operation);
+	run_on_all_cores(asm_virtualize_core);
 
 	Exit:
 	Irp->IoStatus.Information = 0;
@@ -60,6 +62,8 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 
 NTSTATUS mj_close(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 {
+	UNREFERENCED_PARAMETER(DeviceObject);
+
 	NTSTATUS status = STATUS_SUCCESS;
 	PIO_STACK_LOCATION stackLocation = NULL;
 	stackLocation = IoGetCurrentIrpStackLocation(Irp);
