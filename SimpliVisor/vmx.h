@@ -34,5 +34,16 @@ typedef union _IA32_VMX_BASIC_MSR
 } IA32_VMX_BASIC_MSR, * PIA32_VMX_BASIC_MSR;
 
 bool vmx_supported();
-bool setup_vmxon_region();
-bool exit_vmx_operation();
+
+// allocate VMX and VMCS regions across all VCPUs
+void allocate_vmx_regions();
+void free_vmx_regions();
+
+bool reserve_vmxon_region(int core);
+bool reserve_vmcs_region(int core);
+
+bool free_vmxon_region(int core);
+bool free_vmcs_region(int core);
+
+bool enter_vmx_operation(int core);
+bool exit_vmx_operation(int core);

@@ -4,17 +4,16 @@
 void run_on_all_cores(function_t func)
 {
 	KAFFINITY AffinityMask;
-	DbgPrint("%d\n", KeQueryActiveProcessors());
-	for (size_t i = 0; i <= KeQueryActiveProcessors(); i++)
+	for (size_t i = 0; i < KeQueryActiveProcessorCount(NULL); i++)
 	{
 		AffinityMask = int_power(2, i);
 		KeSetSystemAffinityThread(AffinityMask);
 
 		DbgPrint("=====================================================\n");
-		DbgPrint("Current thread is executing in %ull th logical processor.\n", i);
+		DbgPrint("Current thread is executing in %d th logical processor.\n", i);
 
 		// run code here
-		func();
+		func(i);
 	}
 }
 
@@ -26,10 +25,10 @@ void run_on_single_core(function_t func, int core)
 	KeSetSystemAffinityThread(AffinityMask);
 
 	DbgPrint("=====================================================\n");
-	DbgPrint("Current thread is executing in %ull th logical processor.\n", core);
+	DbgPrint("Current thread is executing in %d th logical processor.\n", core);
 
 	// run code here
-	func();
+	func(core);
 }
 
 NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
@@ -38,9 +37,20 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	PIO_STACK_LOCATION stackLocation = NULL;
 	stackLocation = IoGetCurrentIrpStackLocation(Irp);
 
-	//RunAllCores(EnableVMXOperation);
-	run_on_single_core(setup_vmxon_region, 0);
+	ULONG processor_count = KeQueryActiveProcessorCount(NULL);
 
+	if (!vmx_supported())
+	{
+		DbgPrint("VMX Operation is not supported on this CPU\n");
+		goto Exit;
+	}
+
+	g_vcpus = (VCPU*) ExAllocatePool(NonPagedPool, processor_count * sizeof(VCPU));
+
+	allocate_vmx_regions();
+	run_on_all_cores(enter_vmx_operation);
+
+	Exit:
 	Irp->IoStatus.Information = 0;
 	Irp->IoStatus.Status = STATUS_SUCCESS;
 	IoCompleteRequest(Irp, IO_NO_INCREMENT);
@@ -54,8 +64,8 @@ NTSTATUS mj_close(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	PIO_STACK_LOCATION stackLocation = NULL;
 	stackLocation = IoGetCurrentIrpStackLocation(Irp);
 
-	DbgPrint("Handle closed\n");
-	run_on_single_core(exit_vmx_operation, 0);
+	run_on_all_cores(exit_vmx_operation);
+	free_vmx_regions();
 
 	Irp->IoStatus.Information = 0;
 	Irp->IoStatus.Status = STATUS_SUCCESS;

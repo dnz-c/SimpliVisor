@@ -1,4 +1,5 @@
 #include "vmx.h"
+#include "driver.h"
 
 bool vmx_supported()
 {
@@ -23,7 +24,19 @@ bool vmx_supported()
 	return TRUE;
 }
 
-bool setup_vmxon_region()
+void allocate_vmx_regions()
+{
+	run_on_all_cores(reserve_vmxon_region);
+	run_on_all_cores(reserve_vmcs_region);
+}
+
+void free_vmx_regions()
+{
+	run_on_all_cores(free_vmxon_region);
+	run_on_all_cores(free_vmcs_region);
+}
+
+bool reserve_vmxon_region(int core)
 {
 	KIRQL irql = KeGetCurrentIrql();
 	if (irql > DISPATCH_LEVEL)
@@ -38,16 +51,73 @@ bool setup_vmxon_region()
 	PVOID aligned_virtual = PAGE_ALIGN(virtual_contig);
 	UINT64 aligned_phys = MmGetPhysicalAddress(aligned_virtual).QuadPart;
 
-	DbgPrint("Aligned Physical: %p\n", aligned_phys);
+	DbgPrint("Aligned Physical: %#x\n", aligned_phys);
 
 	IA32_VMX_BASIC_MSR vmx_basic = { 0 };
 	vmx_basic.All = __readmsr(IA32_VMX_BASIC);
 
-	DbgPrint("VMX Basic: %ull\n", vmx_basic.All);
+	DbgPrint("VMX Basic: %#x\n", vmx_basic.All);
 
 	*(UINT64*) aligned_virtual = vmx_basic.Fields.RevisionIdentifier;
 
 	KeLowerIrql(irql);
+
+	g_vcpus[core].p_vmxon_region = aligned_phys;
+	g_vcpus[core].v_vmxon_region = virtual_contig;
+
+	return TRUE;
+}
+
+bool reserve_vmcs_region(int core)
+{
+	KIRQL irql = KeGetCurrentIrql();
+	if (irql > DISPATCH_LEVEL)
+		KeRaiseIrql(DPC_NORMAL, &irql);
+
+	PHYSICAL_ADDRESS max_phys = { 0 };
+	max_phys.QuadPart = MAXULONG64;
+	PVOID virtual_contig = MmAllocateContiguousMemory(PAGE_SIZE * 2, max_phys);
+
+	RtlSecureZeroMemory(virtual_contig, PAGE_SIZE * 2);
+
+	PVOID aligned_virtual = PAGE_ALIGN(virtual_contig);
+	UINT64 aligned_phys = MmGetPhysicalAddress(aligned_virtual).QuadPart;
+
+	DbgPrint("Aligned Physical: %#x\n", aligned_phys);
+
+	IA32_VMX_BASIC_MSR vmx_basic = { 0 };
+	vmx_basic.All = __readmsr(IA32_VMX_BASIC);
+
+	DbgPrint("VMX Basic: %#x\n", vmx_basic.All);
+
+	*(UINT64*) aligned_virtual = vmx_basic.Fields.RevisionIdentifier;
+
+	KeLowerIrql(irql);
+
+	g_vcpus[core].p_vmcs_region = aligned_phys;
+	g_vcpus[core].v_vmcs_region = virtual_contig;
+
+	return TRUE;
+}
+
+bool free_vmxon_region(int core)
+{
+	DbgPrint("Freeing vmxon region...\n");
+	MmFreeContiguousMemory(g_vcpus[core].v_vmxon_region);
+	return TRUE;
+}
+
+bool free_vmcs_region(int core)
+{
+	DbgPrint("Freeing vmcs region...\n");
+	MmFreeContiguousMemory(g_vcpus[core].v_vmcs_region);
+	return TRUE;
+}
+
+bool enter_vmx_operation(int core)
+{
+	DbgPrint("Allocating 16KB host stack...\n");
+	g_vcpus[core].host_stack = (UINT64)ExAllocatePool(NonPagedPool, 0x4000); // stack used on vmexit
 
 	DbgPrint("Enabling VMX Operations...");
 	UINT64 cr4 = __readcr4();
@@ -60,7 +130,7 @@ bool setup_vmxon_region()
 	__writecr4(cr4);
 	DbgPrint("cr4 (vmxon): %llx", cr4);
 
-	int status = __vmx_on(&aligned_phys);
+	int status = __vmx_on(&g_vcpus[core].p_vmxon_region);
 	if (status)
 	{
 		DbgPrint("__vmx_on failed with code: %d\n", status);
@@ -72,9 +142,9 @@ bool setup_vmxon_region()
 	return TRUE;
 }
 
-bool exit_vmx_operation()
+bool exit_vmx_operation(int core)
 {
 	__vmx_off();
-	DbgPrint("__vmx_off succeded on core: %ull\n", KeQueryActiveProcessors());
+	DbgPrint("__vmx_off succeded on core: %ull\n", core);
 	return TRUE;
 }
