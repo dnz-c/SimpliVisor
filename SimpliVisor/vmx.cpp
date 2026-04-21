@@ -161,9 +161,28 @@ bool exit_vmx_operation(int core)
 
 void setup_vmcs(int core, int rsp)
 {
+	__vmx_vmwrite(VMCS_LINK_POINTER, ~0ULL);
+
 	__vmx_vmwrite(GUEST_RSP, rsp);
 	__vmx_vmwrite(GUEST_RIP, (size_t)asm_vmx_restore_state);
-	__vmx_vmwrite(GUEST_CR3, __readcr3());
-	
+
 	__vmx_vmwrite(HOST_RSP, g_vcpus[core].host_stack);
+	__vmx_vmwrite(HOST_RIP, (size_t) asm_vmexit_handler);
+
+	__vmx_vmwrite(GUEST_DR7, __readdr(7) | 0x400);
+
+	__vmx_vmwrite(GUEST_CR3, __readcr3());
+	__vmx_vmwrite(HOST_CR3, __readcr3());
+
+	UINT64 cr0 = __readcr0();
+	cr0 |= __readmsr(IA32_VMX_CR0_FIXED0);
+	cr0 &= __readmsr(IA32_VMX_CR0_FIXED1);
+	__vmx_vmwrite(GUEST_CR0, cr0);
+	__vmx_vmwrite(HOST_CR0, cr0);
+
+	UINT64 cr4 = __readcr4();
+	cr4 |= __readmsr(IA32_VMX_CR4_FIXED0);
+	cr4 &= __readmsr(IA32_VMX_CR4_FIXED1);
+	__vmx_vmwrite(GUEST_CR4, cr4);
+	__vmx_vmwrite(HOST_CR4, cr4);
 }

@@ -6,6 +6,8 @@
 
 #define IA32_FEATURE_CONTROL 0x3A
 #define IA32_VMX_BASIC 0x480
+#define IA32_VMX_CR0_FIXED0 0x486
+#define IA32_VMX_CR0_FIXED1 0x487
 #define IA32_VMX_CR4_FIXED0 0x488
 #define IA32_VMX_CR4_FIXED1 0x489
 
@@ -16,6 +18,7 @@ extern "C" {
 
     bool asm_virtualize_core(int core);
     void asm_vmx_restore_state(void);
+    void asm_vmexit_handler(void);
 }
 
 typedef union _IA32_VMX_BASIC_MSR
@@ -37,6 +40,26 @@ typedef union _IA32_VMX_BASIC_MSR
     } Fields;
 } IA32_VMX_BASIC_MSR, * PIA32_VMX_BASIC_MSR;
 
+typedef struct _GUEST_REGS
+{
+    UINT64 rax;
+    UINT64 rcx;
+    UINT64 rdx;
+    UINT64 rbx;
+    UINT64 rsp;
+    UINT64 rbp;
+    UINT64 rsi;
+    UINT64 rdi;
+    UINT64 r8;
+    UINT64 r9;
+    UINT64 r10;
+    UINT64 r11;
+    UINT64 r12;
+    UINT64 r13;
+    UINT64 r14;
+    UINT64 r15;
+} GUEST_REGS, *PGUEST_REGS;
+
 bool vmx_supported();
 
 // allocate VMX and VMCS regions across all VCPUs
@@ -53,3 +76,5 @@ extern "C" bool enter_vmx_operation(int core, UINT64 rsp);
 bool exit_vmx_operation(int core);
 
 void setup_vmcs(int core, int rsp);
+
+extern "C" bool vmexit_handler(PGUEST_REGS regs);

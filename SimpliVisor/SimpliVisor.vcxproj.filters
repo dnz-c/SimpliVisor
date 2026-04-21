@@ -30,12 +30,18 @@
     <ClCompile Include="vmx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="vmexit.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="driver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="vmx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="vmcs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
