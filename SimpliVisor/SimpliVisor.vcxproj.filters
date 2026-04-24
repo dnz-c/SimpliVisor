@@ -49,5 +49,8 @@
     <MASM Include="asm_vmx.asm">
       <Filter>Source Files</Filter>
     </MASM>
+    <MASM Include="asm_segments.asm">
+      <Filter>Source Files</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

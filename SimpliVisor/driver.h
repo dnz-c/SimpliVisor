@@ -27,8 +27,10 @@ struct VCPU
 {
     PVOID v_vmxon_region;
     PVOID v_vmcs_region;
+    PVOID v_msr_bitmap;
     UINT64 p_vmxon_region;
     UINT64 p_vmcs_region;
+    UINT64 p_msr_bitmap;
     UINT64 host_stack;
 };
 extern inline VCPU* g_vcpus = NULL;
