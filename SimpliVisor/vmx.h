@@ -83,23 +83,24 @@ typedef union _IA32_VMX_BASIC_MSR
 
 typedef struct _GUEST_REGS
 {
-    UINT64 rax;
-    UINT64 rcx;
-    UINT64 rdx;
-    UINT64 rbx;
-    UINT64 rsp;
-    UINT64 rbp;
-    UINT64 rsi;
-    UINT64 rdi;
-    UINT64 r8;
-    UINT64 r9;
-    UINT64 r10;
-    UINT64 r11;
-    UINT64 r12;
-    UINT64 r13;
-    UINT64 r14;
-    UINT64 r15;
-} GUEST_REGS, *PGUEST_REGS;
+    ULONG64 r15;
+    ULONG64 r14;
+    ULONG64 r13;
+    ULONG64 r12;
+    ULONG64 r11;
+    ULONG64 r10;
+    ULONG64 r9;
+    ULONG64 r8;
+    ULONG64 rdi;
+    ULONG64 rsi;
+    ULONG64 rbp;
+    ULONG64 rsp_placeholder;
+    ULONG64 rbx;
+    ULONG64 rdx;
+    ULONG64 rcx;
+    ULONG64 rax;
+    ULONG64 rflags;
+} GUEST_REGS, * PGUEST_REGS;
 
 typedef struct _SEGMENT_DESCRIPTOR
 {
