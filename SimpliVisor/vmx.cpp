@@ -148,7 +148,7 @@ bool free_vmcs_region(int core)
 
 bool free_msr_bitmap_region(int core)
 {
-	DbgPrint("Freeing vmcs region...\n");
+	DbgPrint("Freeing msr_bitmap region...\n");
 	MmFreeContiguousMemory(g_vcpus[core].v_msr_bitmap);
 	return TRUE;
 }
@@ -160,16 +160,16 @@ bool enter_vmx_operation(int core, ULONG64 rsp)
 	DbgPrint("Allocating 16KB host stack...\n");
 	g_vcpus[core].host_stack = (ULONG64) ExAllocatePool(NonPagedPool, 0x4000) + 0x4000; // stack used on vmexit
 
-	DbgPrint("Enabling VMX Operations...");
+	DbgPrint("Enabling VMX Operations...\n");
 	ULONG64 cr4 = __readcr4();
-	DbgPrint("cr4: %llx", cr4);
+	DbgPrint("cr4: %llx\n", cr4);
 
 	cr4 |= 0x2000;
 	cr4 |= __readmsr(IA32_VMX_CR4_FIXED0);
 	cr4 &= __readmsr(IA32_VMX_CR4_FIXED1);
 
 	__writecr4(cr4);
-	DbgPrint("cr4 (vmxon): %llx", cr4);
+	DbgPrint("cr4 (vmxon): %llx\n", cr4);
 
 	int status = __vmx_on(&g_vcpus[core].p_vmxon_region);
 	if (status)
@@ -199,7 +199,7 @@ bool enter_vmx_operation(int core, ULONG64 rsp)
 
 bool exit_vmx_operation(int core)
 {
-	__vmx_off();
+	asm_vmcall(VMCALL_EXITVM);
 	DbgPrint("__vmx_off succeded on core: %ull\n", core);
 	return TRUE;
 }

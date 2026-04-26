@@ -4,6 +4,8 @@
 #include <intrin.h>
 #include <cmath>
 
+#define VMCALL_EXITVM 0x1337
+
 #define IA32_VMX_BASIC                  0x480
 #define IA32_VMX_PINBASED_CTLS          0x481
 #define IA32_VMX_PROCBASED_CTLS         0x482
@@ -39,28 +41,7 @@
 
 #define VMXON_TAG 'xmV '
 
-extern "C" {
-    PHYSICAL_ADDRESS MmGetPhysicalAddress(PVOID BaseAddress);
 
-    bool asm_virtualize_core(int core);
-    void asm_vmx_restore_state(void);
-    void asm_vmexit_handler(void);
-
-    USHORT inline get_cs(void);
-    USHORT inline get_ds(void);
-    USHORT inline get_es(void);
-    USHORT inline get_ss(void);
-    USHORT inline get_fs(void);
-    USHORT inline get_gs(void);
-    USHORT inline get_ldtr(void);
-    USHORT inline get_tr(void);
-    USHORT inline get_idt_limit(void);
-    USHORT inline get_gdt_limit(void);
-    USHORT inline get_rflags(void);
-
-    ULONG64 inline get_gdt_base(void);
-    ULONG64 inline get_idt_base(void);
-}
 
 typedef union _IA32_VMX_BASIC_MSR
 {
@@ -161,6 +142,33 @@ enum SEGREGS
     LDTR,
     TR
 };
+
+extern "C" {
+    PHYSICAL_ADDRESS MmGetPhysicalAddress(PVOID BaseAddress);
+    
+    void asm_vmcall(UINT64 arg1);
+    
+    bool asm_virtualize_core(int core);
+    void asm_vmx_restore_state(void);
+    void asm_vmexit_handler(void);
+
+    void asm_exit_vm(UINT64 rip, UINT64 rsp, UINT64 rflags, UINT64 cs, UINT64 ss, PGUEST_REGS regs);
+
+    USHORT inline get_cs(void);
+    USHORT inline get_ds(void);
+    USHORT inline get_es(void);
+    USHORT inline get_ss(void);
+    USHORT inline get_fs(void);
+    USHORT inline get_gs(void);
+    USHORT inline get_ldtr(void);
+    USHORT inline get_tr(void);
+    USHORT inline get_idt_limit(void);
+    USHORT inline get_gdt_limit(void);
+    USHORT inline get_rflags(void);
+
+    ULONG64 inline get_gdt_base(void);
+    ULONG64 inline get_idt_base(void);
+}
 
 static bool TRUE_MSR_SUPPORT = false;
 

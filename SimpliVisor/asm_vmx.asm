@@ -3,9 +3,54 @@
 EXTERN enter_vmx_operation : PROC
 EXTERN vmexit_handler : PROC
 
+; --- exit vmx operation
+; rcx = rip, rdx = rsp, r8 = rflags, r9 = cs, rsp+40 = ss, rsp+48 = pguest_regs
+PUBLIC asm_exit_vm
+asm_exit_vm PROC
+    mov r10, [rsp + 40] ; r10 = ss
+    mov rax, [rsp + 48] ; rax = pguest_regs
+
+    ; build iretq stack frame
+    push r10 ; ss
+    push rdx ; rsp
+    push r8 ; rflags
+    push r9 ; cs
+    push rcx ; rip
+
+    ; restore guest GPRs
+    mov r15, [rax + 0]
+    mov r14, [rax + 8]
+    mov r13, [rax + 16]
+    mov r12, [rax + 24]
+    mov r11, [rax + 32]
+    mov r10, [rax + 40]
+    mov r9,  [rax + 48]
+    mov r8,  [rax + 56]
+    mov rdi, [rax + 64]
+    mov rsi, [rax + 72]
+    mov rbp, [rax + 80]
+    ; skip rax + 88 (rsp placeholder) since iretq will handle the rsp
+    mov rbx, [rax + 96]
+    mov rdx, [rax + 104]
+    mov rcx, [rax + 112]
+
+    ; restore rax since we no longer need the pguest_regs pointer
+    mov rax, [rax+ 120]
+
+    ; return to the OS with vmxoff
+    iretq
+asm_exit_vm ENDP
+
+; --- the vmcall reason will be in rcx
+PUBLIC asm_vmcall
+asm_vmcall PROC
+    vmcall
+    ret
+asm_vmcall ENDP
+
 PUBLIC asm_virtualize_core
 asm_virtualize_core PROC
-	; --- 1. Capture GPRs ---
+	; --- 1 capture GPRs
 	pushfq
 	push rax
 	push rcx
@@ -24,16 +69,14 @@ asm_virtualize_core PROC
 	push r14
 	push r15
 
-	; --- 2. Prepare enter_vmx_operation call
-	; RCX already contains the core index
-	; RDX needs to be the stack pointer
+	; --- prepare enter_vmx_operation call
 	mov rdx, rsp
 
 	sub rsp, 20h ; Shadow space
 	call enter_vmx_operation
 	add rsp, 20h
 
-	; --- 3. enter_vmx_operation should call vmlaunch if we are here we have a problem
+	; --- enter_vmx_operation should call vmlaunch if we are here we have a problem
     pop r15
     pop r14
     pop r13
@@ -52,7 +95,7 @@ asm_virtualize_core PROC
     pop rax
     popfq
     
-    xor rax, rax   ; Return FALSE (0) to the driver
+    xor rax, rax
     ret
 asm_virtualize_core ENDP
 
@@ -82,7 +125,7 @@ asm_vmx_restore_state ENDP
 
 PUBLIC asm_vmexit_handler
 asm_vmexit_handler PROC
-	; --- 1. Capture GPRs ---
+	; --- capture GPRs
 	pushfq
 	push rax
 	push rcx
@@ -101,16 +144,14 @@ asm_vmexit_handler PROC
 	push r14
 	push r15
 
-	; --- 2. Prepare vmexit_handler call
-	; RCX already contains the core index
-	; RDX needs to be the stack pointer
+	; --- prepare vmexit_handler call
 	mov rcx, rsp
 
 	sub rsp, 20h ; Shadow space
 	call vmexit_handler
 	add rsp, 20h
 
-	; --- 3. check the return type optionally
+	; --- check the return type optionally
     test rax, rax ; --- ideally we would jump to the routine that exits vmx operation and restores the host state here
 
     pop r15

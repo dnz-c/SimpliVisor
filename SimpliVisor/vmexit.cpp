@@ -31,6 +31,26 @@ bool vmexit_handler(PGUEST_REGS regs)
         regs->rcx = (ULONG64) (unsigned int) cpu_info[2];
         regs->rdx = (ULONG64) (unsigned int) cpu_info[3];
         break;
+    case 0x12: // VMCALL
+        if (regs->rcx == VMCALL_EXITVM)
+        {
+            UINT64 guest_rsp, guest_rip, guest_eflags, guest_cs, guest_ss;
+            __vmx_vmread(GUEST_RSP, &guest_rsp);
+            __vmx_vmread(GUEST_RIP, &guest_rip);
+            __vmx_vmread(GUEST_RFLAGS, &guest_eflags);
+            __vmx_vmread(GUEST_SS_SELECTOR, &guest_ss);
+            __vmx_vmread(GUEST_CS_SELECTOR, &guest_cs);
+
+            // advance rip so we don't instantly vmcall again when we return to the OS
+            size_t inst_len;
+            __vmx_vmread(VM_EXIT_INSTRUCTION_LEN, &inst_len);
+            guest_rip += inst_len;
+
+            __vmx_off();
+
+            asm_exit_vm(guest_rip, guest_rsp, guest_eflags, guest_cs, guest_ss, regs);
+        }
+        break;
         // since the msr bitmap is zeroed we should only get weird out of bounds calls here so its best to ignore them / return 0
     case 0x1f: // RDMSR
     {
