@@ -36,8 +36,13 @@ int main()
     if (device == INVALID_HANDLE_VALUE)
     {
         printf_s("> Could not open device: 0x%x\n", GetLastError());
-        return 1;
+        //return 1;
     }
+
+    system("pause");
+
+    __cpuid(reg, 0x40000001);
+    std::cout << std::hex << "reg[0]: " << reg[0] << "\nreg[1]: " << reg[1] << "\nreg[2]: " << reg[2] << "\nreg[3]: " << reg[3] << std::endl;
 
     system("pause");
 

@@ -26,6 +26,14 @@ bool vmexit_handler(PGUEST_REGS regs)
             cpu_info[3] = 0;
         }
 
+        else if (regs->rax == 0x40000001)
+        {
+            cpu_info[0] = 0x1337;
+            cpu_info[1] = 0x1337;
+            cpu_info[2] = 0x1337;
+            cpu_info[3] = 0x1337;
+        }
+
         regs->rax = (ULONG64) (unsigned int) cpu_info[0];
         regs->rbx = (ULONG64) (unsigned int) cpu_info[1];
         regs->rcx = (ULONG64) (unsigned int) cpu_info[2];
