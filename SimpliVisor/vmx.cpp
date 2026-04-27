@@ -201,6 +201,15 @@ bool exit_vmx_operation(int core)
 {
 	asm_vmcall(VMCALL_EXITVM);
 	DbgPrint("__vmx_off succeded on core: %ull\n", core);
+
+	UINT64 cr4 = __readcr4();
+	DbgPrint("cr4 (vmxon): %#x\n", cr4);
+
+	cr4 &= ~0x2000;
+
+	DbgPrint("cr4 (vmxoff): %#x\n", cr4);
+	__writecr4(cr4);
+
 	return TRUE;
 }
 

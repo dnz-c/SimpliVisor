@@ -71,6 +71,7 @@ bool vmexit_handler(PGUEST_REGS regs)
         ULONG32 requested_msr = (ULONG32) regs->rcx;
         ULONG64 value = (regs->rax & 0xFFFFFFFF) | ((ULONG64) regs->rdx << 32);
 
+        // forward hyperv enlightenment calls
         if (requested_msr >= 0x40000000 && requested_msr <= 0x400000FF)
         {
             __writemsr(requested_msr, value);
