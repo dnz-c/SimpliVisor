@@ -5,6 +5,24 @@
 #include <intrin.h>
 #include <cmath>
 
+#define PDE_PAGE_SIZE           0x200000
+
+// MSRs
+#define IA32_MTRRCAP            0xFE
+#define IA32_MTRRPHYSBASE(N)    0x200 + (N * 2)
+#define IA32_MTRRPHYSMASK(N)    0x201 + (N * 2)
+#define IA32_MTRR_DEF_TYPE      0x2FF
+#define IA32_VMX_EPT_VPID_CAP   0x48C
+
+enum MEMORY_TYPE
+{
+    UC = 0,
+    WC = 1,
+    WT = 4,
+    WP = 5,
+    WB = 6
+};
+
 // Table 25-9. Format of Extended-Page-Table Pointer
 typedef union _EPTP 
 {
@@ -16,7 +34,7 @@ typedef union _EPTP
         UINT64 accessed_dirty_flags : 1; // 6  Setting this control to 1 enables accessed and dirty flags for EPT (see Section 29.3.5)
         UINT64 shadow_stack_pages : 1; // 7 Setting this control to 1 enables enforcement of access rights for supervisor shadow-stack pages (see Section 29.3.3.2)
         UINT64 reserved1 : 4; // 11:8 
-        UINT64 PML4Address : 40; // n-1:12 Bits N–1:12 of the physical address of the 4-KByte aligned EPT paging-structure (an EPT PML4 table with 4-level EPT and an EPT PML5 table with 5 - level EPT)
+        UINT64 pml4_address : 40; // n-1:12 Bits N–1:12 of the physical address of the 4-KByte aligned EPT paging-structure (an EPT PML4 table with 4-level EPT and an EPT PML5 table with 5 - level EPT)
         UINT64 reserved2 : 12; // 63:n
     } fields;
 }EPTP, * PEPTP;
@@ -134,3 +152,107 @@ typedef union _EPT_PTE
         UINT64 suppress_ve : 1; // 63  Suppress #VE. If the “EPT-violation #VE” VM-execution control is 1, EPT violations caused by accesses to this page are convertible to virtualization exceptions only if this bit is 0 (see Section 26.5.7.1).If “EPT - violation #VE” VMexecution control is 0, this bit is ignored.
     } fields;
 }EPT_PTE, * PEPT_PTE;
+
+typedef union _IA32_MTRR_DEF_TYPE_MSR
+{
+    ULONG64 all;
+    struct
+    {
+        UINT64 memory_type : 8; // 7:0 default memory type for all regions not in MTRRs legal values: 0,1,4,5,6
+        UINT64 reserved1 : 2; // 9:8
+        UINT64 fixed_enabled : 1; // 10 1 if fixed MTRRs are enabled
+        UINT64 enabled : 1; // 11 1 if MTRRs are enabled
+        UINT64 reserved2 : 52; // 63:12 reserved
+    } fields;
+} IA32_MTRR_DEF_TYPE_MSR, * PIA32_MTRR_DEF_TYPE_MSR;
+
+typedef union _IA32_MTRRCAP_MSR
+{
+    ULONG64 all;
+    struct
+    {
+        UINT64 vcnt : 8; // 7:0 number of variable ranges implemented
+        UINT64 fix : 1; // 8 if set fixed range MTRRs are supported
+        UINT64 reserved1 : 1; // 9
+        UINT64 wc : 1; // 10 if set write combining memory type is supported
+        UINT64 smrr : 1; // 11 system management mode range register is supported if set
+        UINT64 reserved2 : 52; // 63:12 reserved
+    } fields;
+} IA32_MTRRCAP_MSR, * PIA32_MTRRCAP_MSR;
+
+typedef union _IA32_MTRRPHYSBASEN_MSR
+{
+    ULONG64 all;
+    struct
+    {
+        UINT64 memory_type : 8; // 7:0 memory type for region legal values: 0,1,4,5,6
+        UINT64 reserved1 : 4; // 11:8
+        UINT64 physbase : 40; // range base address
+        UINT64 reserved2 : 12;
+    } fields;
+} IA32_MTRRPHYSBASEN_MSR, * PIA32_MTRRPHYSBASEN_MSR;
+
+typedef union _IA32_MTRRPHYSMASKN_MSR
+{
+    ULONG64 all;
+    struct
+    {
+        UINT64 reserved1 : 11; // 10:0
+        UINT64 valid : 1; // 11 if set the region is active
+        UINT64 mask : 40; // range mask
+        UINT64 reserved2 : 12;
+    } fields;
+} IA32_MTRRPHYSMASKN_MSR, * PIA32_MTRRPHYSMASKN_MSR;
+
+typedef union _IA32_VMX_EPT_VPID_CAP_MSR
+{
+    ULONG64 all;
+    struct
+    {
+        UINT64 execute_only : 1; // 0 If bit 0 is read as 1, the processor supports execute-only translations by EPT. This support allows software to configure EPT paging - structure entries in which bits 1:0 are clear(indicating that data accesses are not allowed) and bit 2 is set(indicating that instruction fetches are allowed)
+        UINT64 reserved1 : 5;
+        UINT64 page_walk_4 : 1; // 6 if 1 cpu supports 4 level page walk
+        UINT64 page_walk_5 : 1; // 7 if 1 cpu supports 5 level page walk
+        UINT64 eptp_uc : 1; // 8 if 1 eptp caching type can be UC
+        UINT64 reserved2 : 5;
+        UINT64 eptp_wb : 1; // 14 if 1 cpu allows caching type WB on eptp
+        UINT64 reserved3 : 1;
+        UINT64 pde_page_size : 1; // 16 if 1 cpu allows 2MB pages
+        UINT64 pdpte_page_size : 1; // 17 if 1 cpu allows 1GB pages
+        UINT64 reserved4 : 2;
+        UINT64 invept : 1; // 20 if 1 cpu supports invept
+        UINT64 accessed_and_dirty_eptp : 1; // 21 if 1 cpu supports eptp accessed and dirty page tracking
+        UINT64 advanced_ept_violation_info : 1; // 22 if 1 cpu gives advanced ept violation information on vmexits
+        UINT64 supervisor_shadow_stack : 1; // 23 if 1 cpu supports supervisor shadow stack
+        UINT64 reserved5 : 1;
+        UINT64 single_ctx_invept : 1; // 25 if 1 cpu supports the single context invept instruction
+        UINT64 all_ctx_invept : 1; // 26 if 1 cpu supports the all context invept instruction
+        UINT64 reserved6 : 5;
+        UINT64 invvpid : 1; // 32
+        UINT64 reserved7 : 7;
+        UINT64 individual_address_invvpid : 1; // 40
+        UINT64 single_ctx_invvpid : 1; // 41
+        UINT64 all_ctx_invvpid : 1; // 42
+        UINT64 single_ctx_retain_global_invvpid : 1; // 43
+        UINT64 reserved8 : 4;
+        UINT64 hlat_max_prefix_size : 6; // 53:48
+        UINT64 reserved9 : 10;
+    } fields;
+} IA32_VMX_EPT_VPID_CAP_MSR, * PIA32_VMX_EPT_VPID_CAP_MSR;
+
+typedef struct _MEMORY_REGION
+{
+    UINT64 start_address;
+    UINT64 end_address;
+    UINT64 memory_type;
+    UINT64 size;
+} MEMORY_REGION, * PMEMORY_REGION;
+
+extern inline EPTP g_eptp = { 0 };
+extern inline int memory_region_cnt = 0;
+extern inline PEPT_PDE_2MB g_pdes = NULL;
+extern inline PMEMORY_REGION memory_regions = NULL;
+
+bool mtrr_support();
+void populate_mtrr_regions();
+void initialize_eptp();

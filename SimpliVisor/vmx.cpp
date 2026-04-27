@@ -1,6 +1,7 @@
 #include "vmx.h"
 #include "driver.h"
 #include "vmcs.h"
+#include "ept.h"
 
 bool vmx_supported()
 {
@@ -283,6 +284,8 @@ ULONG adjust_controls(ULONG ctl, ULONG msr)
 
 void setup_vmcs(int core, ULONG64 rsp)
 {
+	__vmx_vmwrite(EPT_POINTER, g_eptp.all);
+
 	__vmx_vmwrite(HOST_ES_SELECTOR, get_es() & 0xF8);
 	__vmx_vmwrite(HOST_CS_SELECTOR, get_cs() & 0xF8);
 	__vmx_vmwrite(HOST_SS_SELECTOR, get_ss() & 0xF8);
@@ -330,7 +333,7 @@ void setup_vmcs(int core, ULONG64 rsp)
 	__vmx_vmwrite(HOST_IDTR_BASE, get_idt_base());
 
 	__vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, adjust_controls(CPU_BASED_ACTIVATE_MSR_BITMAP | CPU_BASED_ACTIVATE_SECONDARY_CONTROLS, TRUE_MSR_SUPPORT ? IA32_VMX_TRUE_PROCBASED_CTLS : IA32_VMX_PROCBASED_CTLS));
-	__vmx_vmwrite(SECONDARY_VM_EXEC_CONTROL, adjust_controls(CPU_BASED_CTL2_RDTSCP | CPU_BASED_CTL2_ENABLE_INVPCID | CPU_BASED_CTL2_ENABLE_XSAVE_XRSTORS | CPU_BASED_CTL2_ENABLE_USER_WAIT_PAUSE, IA32_VMX_PROCBASED_CTLS2));
+	__vmx_vmwrite(SECONDARY_VM_EXEC_CONTROL, adjust_controls(CPU_BASED_CTL2_RDTSCP | CPU_BASED_CTL2_ENABLE_INVPCID | CPU_BASED_CTL2_ENABLE_XSAVE_XRSTORS | CPU_BASED_CTL2_ENABLE_USER_WAIT_PAUSE | CPU_BASED_CTL2_ENABLE_EPT, IA32_VMX_PROCBASED_CTLS2));
 	__vmx_vmwrite(PIN_BASED_VM_EXEC_CONTROL, adjust_controls(0, TRUE_MSR_SUPPORT ? IA32_VMX_TRUE_PINBASED_CTLS : IA32_VMX_PINBASED_CTLS));
 
 	__vmx_vmwrite(VM_EXIT_CONTROLS, adjust_controls(VM_EXIT_IA32E_MODE | VM_EXIT_SAVE_IA32_EFER, TRUE_MSR_SUPPORT ? IA32_VMX_TRUE_EXIT_CTLS : IA32_VMX_EXIT_CTLS));
@@ -362,7 +365,7 @@ void setup_vmcs(int core, ULONG64 rsp)
 	__vmx_vmwrite(HOST_SYSENTER_EIP, __readmsr(IA32_SYSENTER_EIP));
 	__vmx_vmwrite(HOST_SYSENTER_ESP, __readmsr(IA32_SYSENTER_ESP));
 
-	UINT64 efer = __readmsr(0xC0000080); // IA32_EFER
+	UINT64 efer = __readmsr(IA32_EFER); // IA32_EFER
 	__vmx_vmwrite(GUEST_EFER, efer);
 	__vmx_vmwrite(HOST_EFER, efer);
 

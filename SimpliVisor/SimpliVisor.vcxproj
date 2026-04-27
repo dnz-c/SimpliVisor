@@ -127,11 +127,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="driver.cpp" />
+    <ClCompile Include="ept.cpp" />
     <ClCompile Include="vmexit.cpp" />
     <ClCompile Include="vmx.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="driver.h" />
+    <ClInclude Include="ept.h" />
     <ClInclude Include="vmcs.h" />
     <ClInclude Include="vmx.h" />
   </ItemGroup>

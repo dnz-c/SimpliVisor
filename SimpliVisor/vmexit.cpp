@@ -1,5 +1,6 @@
 #include "vmx.h"
 #include "vmcs.h"
+#include "ept.h"
 
 bool vmexit_handler(PGUEST_REGS regs)
 {
@@ -78,6 +79,19 @@ bool vmexit_handler(PGUEST_REGS regs)
         }
     }
         break;
+    case 0x30: // EPT Violation
+    {
+        size_t faulting_phys_addr = 0;
+        __vmx_vmread(GUEST_PHYSICAL_ADDRESS, &faulting_phys_addr);
+        DbgPrint("Caught EPT Violation, violating address %p\n", faulting_phys_addr);
+
+        size_t pd_index = faulting_phys_addr / PDE_PAGE_SIZE;
+
+        g_pdes[pd_index].fields.execute_access = 1;
+
+        // TODO: add invept asm stub call here to refresh the ept tlb
+    }
+        return true; // dont advance rip on faults
     default:
         size_t _guest_rip = 0;
         size_t inst_len_debug = 0;

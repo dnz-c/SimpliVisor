@@ -32,6 +32,6 @@ struct VCPU
     UINT64 p_vmcs_region;
     UINT64 p_msr_bitmap;
     UINT64 host_stack;
-    UINT64 p_eptp;
 };
+
 extern inline VCPU* g_vcpus = NULL;

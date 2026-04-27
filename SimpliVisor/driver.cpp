@@ -1,5 +1,6 @@
 #include "driver.h"
 #include "vmx.h"
+#include "ept.h"
 
 void run_on_all_cores(function_t func)
 {
@@ -49,8 +50,14 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 
 	g_vcpus = (VCPU*) ExAllocatePool(NonPagedPool, processor_count * sizeof(VCPU));
 
-	allocate_vmx_regions();
-	run_on_all_cores(asm_virtualize_core);
+	if (mtrr_support())
+	{
+		populate_mtrr_regions();
+		initialize_eptp();
+
+		allocate_vmx_regions();
+		run_on_all_cores(asm_virtualize_core);
+	}
 
 	Exit:
 	Irp->IoStatus.Information = 0;
