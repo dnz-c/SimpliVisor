@@ -3,6 +3,14 @@
 EXTERN enter_vmx_operation : PROC
 EXTERN vmexit_handler : PROC
 
+; --- invalidate the ept tlb
+; rcx = type 1: single ctx, 2: all ctx, rdx = pointer to 128bit invept descriptor 
+PUBLIC asm_invept
+asm_invept PROC
+    invept rcx, oword ptr [rdx]
+    ret
+asm_invept ENDP
+
 ; --- exit vmx operation
 ; rcx = rip, rdx = rsp, r8 = rflags, r9 = cs, rsp+40 = ss, rsp+48 = pguest_regs
 PUBLIC asm_exit_vm

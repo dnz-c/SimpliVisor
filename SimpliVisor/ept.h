@@ -263,6 +263,17 @@ typedef struct _EPT_PTE_BUFFER
     UINT64 size;
 } EPT_PTE_BUFFER, * PEPT_PTE_BUFFER;
 
+typedef struct _INVEPT_DESCRIPTOR
+{
+    UINT64 eptp;
+    UINT64 reserved1;
+} INVEPT_DESCRIPTOR, * PINVEPT_DESCRIPTOR;
+
+extern "C"
+{
+    void asm_invept(UINT32 type, PINVEPT_DESCRIPTOR descriptor);
+}
+
 extern inline PEPT_PDE_2MB g_pdes = NULL;
 extern inline EPTP g_eptp = { 0 };
 
@@ -277,4 +288,4 @@ void populate_mtrr_regions();
 UINT8 get_fixed_mtrr_type(UINT64 physical_address);
 void initialize_eptp();
 // splits a 2mb large page into 512 4kb pages keeping the same access rights, returns the new PT
-PEPT_PTE split_pde(int pd_idx);
+PEPT_PTE split_pde(UINT64 pd_idx);

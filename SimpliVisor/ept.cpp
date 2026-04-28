@@ -265,7 +265,7 @@ void initialize_eptp()
 	g_eptp.all = eptp.all;
 }
 
-PEPT_PTE split_pde(int pd_idx)
+PEPT_PTE split_pde(UINT64 pd_idx)
 {
 	if (pd_idx >= 512 * 512) return NULL;
 
@@ -314,5 +314,5 @@ PEPT_PTE split_pde(int pd_idx)
 
 /* 
 TODO:	Add proper devirtualize routine to discard all allocated pages aswell as all split pages
-		Add invept asm stub (invept after splitting page)
+			- Find some way to track split up pages and write a helper to get the pt or pd from a phys address
 */

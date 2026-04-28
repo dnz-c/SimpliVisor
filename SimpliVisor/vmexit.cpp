@@ -85,11 +85,20 @@ bool vmexit_handler(PGUEST_REGS regs)
         __vmx_vmread(GUEST_PHYSICAL_ADDRESS, &faulting_phys_addr);
         DbgPrint("Caught EPT Violation, violating address %p\n", faulting_phys_addr);
 
-        size_t pd_index = faulting_phys_addr / PDE_PAGE_SIZE;
+        int pd_idx = faulting_phys_addr / PDE_PAGE_SIZE;
+        int pt_idx = (faulting_phys_addr % PDE_PAGE_SIZE) / PAGE_SIZE;
 
-        g_pdes[pd_index].fields.execute_access = 1;
+        EPT_PDE pde = { 0 };
+        pde.all = g_pdes[pd_idx].all;
 
-        // TODO: add invept asm stub call here to refresh the ept tlb
+        UINT64 pt_phys = pde.fields.pfn * PAGE_SIZE;
+
+        UINT64 offset = pt_phys - ept_pte_buffer.start_phys_address;
+        PEPT_PTE pt = (PEPT_PTE) (ept_pte_buffer.start_virt_address + offset);
+
+        INVEPT_DESCRIPTOR desc = { 0 };
+        desc.eptp = g_eptp.all;
+        asm_invept(1, &desc);
     }
         return true; // dont advance rip on faults
     default:

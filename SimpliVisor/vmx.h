@@ -144,7 +144,8 @@ enum SEGREGS
     TR
 };
 
-extern "C" {
+extern "C" 
+{
     PHYSICAL_ADDRESS MmGetPhysicalAddress(PVOID BaseAddress);
     
     void asm_vmcall(UINT64 arg1);
