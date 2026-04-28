@@ -1,0 +1,47 @@
+#pragma once
+#include <wdm.h>
+#include <ntddk.h>
+#include <intrin.h>
+#include <cmath>
+
+#define MAX_VMEXIT_REASON 75
+
+typedef struct _GUEST_REGS
+{
+    ULONG64 r15;
+    ULONG64 r14;
+    ULONG64 r13;
+    ULONG64 r12;
+    ULONG64 r11;
+    ULONG64 r10;
+    ULONG64 r9;
+    ULONG64 r8;
+    ULONG64 rdi;
+    ULONG64 rsi;
+    ULONG64 rbp;
+    ULONG64 rsp_placeholder;
+    ULONG64 rbx;
+    ULONG64 rdx;
+    ULONG64 rcx;
+    ULONG64 rax;
+    ULONG64 rflags;
+} GUEST_REGS, * PGUEST_REGS;
+
+typedef struct _EXIT_CONTEXT
+{
+    PGUEST_REGS regs;
+    BOOLEAN invalidate_tlb;
+    BOOLEAN advance_rip;
+} EXIT_CONTEXT, * PEXIT_CONTEXT;
+
+typedef void (*t_VMEXIT_HANDLER)(PEXIT_CONTEXT);
+extern inline t_VMEXIT_HANDLER g_vmexit_handlers[MAX_VMEXIT_REASON] = { NULL };
+
+void init_vmexit_dispatch_table();
+
+void handle_cpuid(PEXIT_CONTEXT ctx);
+void handle_vmcall(PEXIT_CONTEXT ctx);
+void handle_rdmsr(PEXIT_CONTEXT ctx);
+void handle_wrmsr(PEXIT_CONTEXT ctx);
+void handle_ept_violation(PEXIT_CONTEXT ctx);
+void handle_unsupported(PEXIT_CONTEXT ctx);

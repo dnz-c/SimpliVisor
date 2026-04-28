@@ -1,6 +1,7 @@
 #include "driver.h"
 #include "vmx.h"
 #include "ept.h"
+#include "vmexit_handlers.h"
 
 void run_on_all_cores(function_t func)
 {
@@ -54,8 +55,9 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	{
 		populate_mtrr_regions();
 		initialize_eptp();
-
 		allocate_vmx_regions();
+		init_vmexit_dispatch_table();
+		
 		run_on_all_cores(asm_virtualize_core);
 	}
 

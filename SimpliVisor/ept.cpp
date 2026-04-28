@@ -312,6 +312,40 @@ PEPT_PTE split_pde(UINT64 pd_idx)
 	return pt;
 }
 
+PEPT_PTE get_ept_pt(UINT64 guest_physical)
+{
+	int pd_idx = guest_physical / PDE_PAGE_SIZE;
+	int pt_idx = (guest_physical % PDE_PAGE_SIZE) / PAGE_SIZE;
+
+	if (pd_idx >= 512 * 512) return NULL;
+	if (pt_idx >= 512) return NULL;
+
+	EPT_PDE pde = { 0 };
+	pde.all = g_pdes[pd_idx].all;
+
+	if (pde.fields.page_size == 1) return NULL; // the page has not been split yet
+
+	UINT64 pt_phys = pde.fields.pfn * PAGE_SIZE;
+	UINT64 offset = pt_phys - ept_pte_buffer.start_phys_address;
+	PEPT_PTE pt = (PEPT_PTE) (ept_pte_buffer.start_virt_address + offset);
+	
+	return pt;
+}
+
+PEPT_PDE_2MB get_ept_pde(UINT64 guest_physical)
+{
+	int pd_idx = guest_physical / PDE_PAGE_SIZE;
+
+	if (pd_idx >= 512 * 512) return NULL;
+
+	EPT_PDE_2MB pde = { 0 };
+	pde.all = g_pdes[pd_idx].all;
+
+	if (pde.fields.page_size == 0) return NULL; // the page has been split
+
+	return &g_pdes[pd_idx];
+}
+
 /* 
 TODO:	Add proper devirtualize routine to discard all allocated pages aswell as all split pages
 			- Find some way to track split up pages and write a helper to get the pt or pd from a phys address

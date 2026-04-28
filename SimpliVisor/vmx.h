@@ -4,6 +4,8 @@
 #include <intrin.h>
 #include <cmath>
 
+#include "vmexit_handlers.h"
+
 #define VMCALL_EXITVM 0x1337
 
 // MSRs
@@ -42,8 +44,6 @@
 
 #define VMXON_TAG 'xmV '
 
-
-
 typedef union _IA32_VMX_BASIC_MSR
 {
     ULONG64 All;
@@ -63,27 +63,6 @@ typedef union _IA32_VMX_BASIC_MSR
     } Fields;
 } IA32_VMX_BASIC_MSR, * PIA32_VMX_BASIC_MSR;
 
-typedef struct _GUEST_REGS
-{
-    ULONG64 r15;
-    ULONG64 r14;
-    ULONG64 r13;
-    ULONG64 r12;
-    ULONG64 r11;
-    ULONG64 r10;
-    ULONG64 r9;
-    ULONG64 r8;
-    ULONG64 rdi;
-    ULONG64 rsi;
-    ULONG64 rbp;
-    ULONG64 rsp_placeholder;
-    ULONG64 rbx;
-    ULONG64 rdx;
-    ULONG64 rcx;
-    ULONG64 rax;
-    ULONG64 rflags;
-} GUEST_REGS, * PGUEST_REGS;
-
 typedef struct _SEGMENT_DESCRIPTOR
 {
     USHORT LIMIT0;
@@ -94,7 +73,7 @@ typedef struct _SEGMENT_DESCRIPTOR
     UCHAR  BASE2;
 } SEGMENT_DESCRIPTOR, * PSEGMENT_DESCRIPTOR;
 
-typedef union SEGMENT_ATTRIBUTES
+typedef union _SEGMENT_ATTRIBUTES
 {
     USHORT UCHARs;
     struct
@@ -111,9 +90,9 @@ typedef union SEGMENT_ATTRIBUTES
         USHORT GAP : 4;
 
     } Fields;
-} SEGMENT_ATTRIBUTES;
+} SEGMENT_ATTRIBUTES, * PSEGMENT_ATTRIBUTES;
 
-typedef struct SEGMENT_SELECTOR
+typedef struct _SEGMENT_SELECTOR
 {
     USHORT             SEL;
     SEGMENT_ATTRIBUTES ATTRIBUTES;
@@ -176,6 +155,8 @@ static bool TRUE_MSR_SUPPORT = false;
 
 // determines vmx support and vm feature supports
 bool vmx_supported();
+
+void init_vmexit_dispatch_table();
 
 // allocate VMX and VMCS regions across all VCPUs
 void allocate_vmx_regions();
