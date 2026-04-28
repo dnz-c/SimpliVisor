@@ -100,7 +100,7 @@ UINT8 get_fixed_mtrr_type(UINT64 physical_address)
 	}
 	else
 	{
-		return -1; // indicate to leave existing caching
+		return 0xff; // indicate to leave existing caching
 	}
 
 	return (UINT8) ((msr_value >> (type_index * 8)) & 0xFF);
@@ -242,12 +242,17 @@ void initialize_eptp()
 	{
 		// handle fixed size MTRR regions across the first mb of ram
 		PEPT_PTE split_pt = split_pde(0);
+		if (!split_pt)
+		{
+			DbgPrint("Failed to split first PDE!\n");
+			return;
+		}
 
 		for (size_t i = 0; i < 512; i++)
 		{
 			EPT_PTE pte = split_pt[i];
 			UINT8 fixed_type = get_fixed_mtrr_type(pte.fields.pfn * PAGE_SIZE);
-			if (fixed_type == -1) continue;
+			if (fixed_type == 0xff) continue;
 
 			pte.fields.memory_type = fixed_type;
 			split_pt[i] = pte;
@@ -262,7 +267,7 @@ void initialize_eptp()
 
 PEPT_PTE split_pde(int pd_idx)
 {
-	if (pd_idx >= 512 * 512) return;
+	if (pd_idx >= 512 * 512) return NULL;
 
 	EPT_PDE_2MB ept_pde_2mb = g_pdes[pd_idx];
 
@@ -274,7 +279,7 @@ PEPT_PTE split_pde(int pd_idx)
 	if (allocated_pt_addr >= ept_pte_buffer.start_virt_address + ept_pte_buffer.size)
 	{
 		DbgPrint("exhausted PT pool, cannot split page %d\n", pd_idx); // UNSAFE in VMX Root
-		return;
+		return NULL;
 	}
 	
 	PEPT_PTE pt = (PEPT_PTE) allocated_pt_addr;
