@@ -290,6 +290,6 @@ void initialize_eptp();
 // splits a 2mb large page into 512 4kb pages keeping the same access rights, returns the new PT
 PEPT_PTE split_pde(UINT64 pd_idx);
 // will return NULL if the PDE has not been split
-PEPT_PTE get_ept_pt(UINT64 guest_physical);
+PEPT_PTE get_ept_pte(UINT64 guest_physical);
 // will return NULL if the PDE has been split
 PEPT_PDE_2MB get_ept_pde(UINT64 guest_physical);

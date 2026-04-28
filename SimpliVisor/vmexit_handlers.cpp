@@ -1,6 +1,7 @@
 #include "vmexit_handlers.h"
 #include "vmcs.h"
 #include "vmx.h"
+#include "ept.h"
 
 void init_vmexit_dispatch_table()
 {
@@ -97,6 +98,19 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
     size_t faulting_phys_addr = 0;
     __vmx_vmread(GUEST_PHYSICAL_ADDRESS, &faulting_phys_addr);
 
+    PEPT_PTE pte = get_ept_pte(faulting_phys_addr);
+    if (!pte)
+        goto Exit;
+
+    DbgPrint("CAUGHT EPT VIOLATION!\n");
+    DbgPrint("Faulting Physical Addr: 0x%llX\n", faulting_phys_addr);
+
+    pte->fields.read_access = 1;
+    pte->fields.write_access = 1;
+
+    DbgPrint("Restored permissions on PTE %p\n", pte);
+
+    Exit:
     ctx->invalidate_tlb = true;
     ctx->advance_rip = false;
 }

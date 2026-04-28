@@ -51,15 +51,18 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 
 	g_vcpus = (VCPU*) ExAllocatePool(NonPagedPool, processor_count * sizeof(VCPU));
 
-	if (mtrr_support())
+	if (!mtrr_support())
 	{
-		populate_mtrr_regions();
-		initialize_eptp();
-		allocate_vmx_regions();
-		init_vmexit_dispatch_table();
-		
-		run_on_all_cores(asm_virtualize_core);
+		DbgPrint("No MTRR support\n");
+		goto Exit;
 	}
+
+	populate_mtrr_regions();
+	initialize_eptp();
+	allocate_vmx_regions();
+	init_vmexit_dispatch_table();
+
+	run_on_all_cores(asm_virtualize_core);
 
 	Exit:
 	Irp->IoStatus.Information = 0;

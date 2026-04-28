@@ -312,7 +312,7 @@ PEPT_PTE split_pde(UINT64 pd_idx)
 	return pt;
 }
 
-PEPT_PTE get_ept_pt(UINT64 guest_physical)
+PEPT_PTE get_ept_pte(UINT64 guest_physical)
 {
 	int pd_idx = guest_physical / PDE_PAGE_SIZE;
 	int pt_idx = (guest_physical % PDE_PAGE_SIZE) / PAGE_SIZE;
@@ -329,7 +329,7 @@ PEPT_PTE get_ept_pt(UINT64 guest_physical)
 	UINT64 offset = pt_phys - ept_pte_buffer.start_phys_address;
 	PEPT_PTE pt = (PEPT_PTE) (ept_pte_buffer.start_virt_address + offset);
 	
-	return pt;
+	return &pt[pt_idx];
 }
 
 PEPT_PDE_2MB get_ept_pde(UINT64 guest_physical)
