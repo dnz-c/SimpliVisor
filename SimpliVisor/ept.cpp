@@ -71,6 +71,41 @@ void populate_mtrr_regions()
 	}
 }
 
+UINT8 get_fixed_mtrr_type(UINT64 physical_address)
+{
+	ULONG64 msr_value;
+	UINT8 type_index;
+
+	// 64kb range
+	if (physical_address < 0x80000)
+	{
+		msr_value = __readmsr(IA32_MTRR_FIX64K_00000);
+		type_index = (physical_address / 0x10000) % 8;
+	}
+	// 16kb range
+	else if (physical_address < 0xC0000)
+	{
+		if (physical_address < 0xA0000)
+			msr_value = __readmsr(IA32_MTRR_FIX16K_80000);
+		else
+			msr_value = __readmsr(IA32_MTRR_FIX16K_A0000);
+		type_index = ((physical_address - 0x80000) / 0x4000) % 8;
+	}
+	// 8kb range
+	else if (physical_address < 0x100000)
+	{
+		UINT64 msr_offset = (physical_address - 0xC0000) / 0x8000;
+		msr_value = __readmsr(IA32_MTRR_FIX4K_(msr_offset));
+		type_index = ((physical_address - 0xC0000) / 0x1000) % 8;
+	}
+	else
+	{
+		return -1; // indicate to leave existing caching
+	}
+
+	return (UINT8) ((msr_value >> (type_index * 8)) & 0xFF);
+}
+
 void initialize_eptp()
 {
 	IA32_VMX_EPT_VPID_CAP_MSR vmx_ept_vpid_cap;
@@ -186,13 +221,93 @@ void initialize_eptp()
 		g_pdes[idx_pd].all = pde.all;
 	}
 
+	PVOID pte_buffer = MmAllocateContiguousMemory(PAGE_SIZE * PTES_TO_ALLOCATE, max_phys);
+	if (pte_buffer == NULL)
+	{
+		DbgPrint("Failed to allocate pte buffer\n");
+		return;
+	}
+	RtlSecureZeroMemory(pte_buffer, PAGE_SIZE * PTES_TO_ALLOCATE);
+
+	DbgPrint("PTE Buffer @ %p\n", pte_buffer);
+
+	ept_pte_buffer.start_phys_address = MmGetPhysicalAddress(pte_buffer).QuadPart;
+	ept_pte_buffer.start_virt_address = (UINT64)pte_buffer;
+	ept_pte_buffer.curr_virt_address = (UINT64)pte_buffer;
+	ept_pte_buffer.size = PAGE_SIZE * PTES_TO_ALLOCATE;
+
+	_IA32_MTRRCAP_MSR mtrrcap;
+	mtrrcap.all = __readmsr(IA32_MTRRCAP);
+	if (mtrrcap.fields.fix)
+	{
+		// handle fixed size MTRR regions across the first mb of ram
+		PEPT_PTE split_pt = split_pde(0);
+
+		for (size_t i = 0; i < 512; i++)
+		{
+			EPT_PTE pte = split_pt[i];
+			UINT8 fixed_type = get_fixed_mtrr_type(pte.fields.pfn * PAGE_SIZE);
+			if (fixed_type == -1) continue;
+
+			pte.fields.memory_type = fixed_type;
+			split_pt[i] = pte;
+
+			DbgPrint("applied fixed tpye: %d to page: %llx\n", fixed_type, pte.fields.pfn * PAGE_SIZE);
+		}
+	}
+
 	DbgPrint("using eptp configuration %llx\n", eptp.all);
 	g_eptp.all = eptp.all;
 }
 
+PEPT_PTE split_pde(int pd_idx)
+{
+	if (pd_idx >= 512 * 512) return;
+
+	EPT_PDE_2MB ept_pde_2mb = g_pdes[pd_idx];
+
+	PHYSICAL_ADDRESS max_phys = { 0 };
+	max_phys.QuadPart = MAXULONG64;
+	
+	// since we cant call any os mem alloc functions in vmx root mode we have to grab the memory from our pre allocated buffer
+	UINT64 allocated_pt_addr = (UINT64) InterlockedExchangeAdd64((LONG64*) &ept_pte_buffer.curr_virt_address, PAGE_SIZE);
+	if (allocated_pt_addr >= ept_pte_buffer.start_virt_address + ept_pte_buffer.size)
+	{
+		DbgPrint("exhausted PT pool, cannot split page %d\n", pd_idx); // UNSAFE in VMX Root
+		return;
+	}
+	
+	PEPT_PTE pt = (PEPT_PTE) allocated_pt_addr;
+	RtlSecureZeroMemory(pt, PAGE_SIZE);
+
+	for (size_t pt_idx = 0; pt_idx < 512; pt_idx++)
+	{
+		EPT_PTE pte = { 0 };
+		pte.fields.read_access = ept_pde_2mb.fields.read_access;
+		pte.fields.write_access = ept_pde_2mb.fields.write_access;
+		pte.fields.execute_access = ept_pde_2mb.fields.execute_access;
+		pte.fields.memory_type = ept_pde_2mb.fields.memory_type;
+		pte.fields.pfn = ((pd_idx * PDE_PAGE_SIZE) + (pt_idx * PAGE_SIZE)) / PAGE_SIZE;
+
+		pt[pt_idx] = pte;
+	}
+
+	EPT_PDE ept_pde_split = { 0 };
+	ept_pde_split.fields.read_access = ept_pde_2mb.fields.read_access;
+	ept_pde_split.fields.write_access = ept_pde_2mb.fields.write_access;
+	ept_pde_split.fields.execute_access = ept_pde_2mb.fields.execute_access;
+	ept_pde_split.fields.page_size = 0;
+
+	UINT64 offset = allocated_pt_addr - ept_pte_buffer.start_virt_address;
+	UINT64 pt_phys = ept_pte_buffer.start_phys_address + offset;
+	ept_pde_split.fields.pfn = pt_phys / PAGE_SIZE;
+
+	InterlockedExchange64((LONG64*) & g_pdes[pd_idx], ept_pde_split.all);
+
+	return pt;
+}
+
 /* 
-TODO:	Add static range MTRR regions
-		Add 2MB to 4KB splitting mechanism
-		Add PTE pool with 10 * 512 pre allocated PTEs we can grab in vmx root mode without new allocations
-		Add proper devirtualize routine to discard all allocated pages aswell as all split pages
+TODO:	Add proper devirtualize routine to discard all allocated pages aswell as all split pages
+		Add invept asm stub (invept after splitting page)
 */

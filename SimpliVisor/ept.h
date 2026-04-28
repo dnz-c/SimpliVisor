@@ -5,12 +5,19 @@
 #include <intrin.h>
 #include <cmath>
 
+// number of PTs to allocate for later splitting
+#define PTES_TO_ALLOCATE        0x10
+
 #define PDE_PAGE_SIZE           0x200000
 
 // MSRs
 #define IA32_MTRRCAP            0xFE
 #define IA32_MTRRPHYSBASE(N)    0x200 + (N * 2)
 #define IA32_MTRRPHYSMASK(N)    0x201 + (N * 2)
+#define IA32_MTRR_FIX64K_00000  0x250
+#define IA32_MTRR_FIX16K_80000  0x258
+#define IA32_MTRR_FIX16K_A0000  0x259
+#define IA32_MTRR_FIX4K_(N)     0x268 + N
 #define IA32_MTRR_DEF_TYPE      0x2FF
 #define IA32_VMX_EPT_VPID_CAP   0x48C
 
@@ -248,11 +255,26 @@ typedef struct _MEMORY_REGION
     UINT64 size;
 } MEMORY_REGION, * PMEMORY_REGION;
 
-extern inline EPTP g_eptp = { 0 };
-extern inline int memory_region_cnt = 0;
+typedef struct _EPT_PTE_BUFFER
+{
+    UINT64 start_phys_address;
+    UINT64 start_virt_address;
+    UINT64 curr_virt_address;
+    UINT64 size;
+} EPT_PTE_BUFFER, * PEPT_PTE_BUFFER;
+
 extern inline PEPT_PDE_2MB g_pdes = NULL;
+extern inline EPTP g_eptp = { 0 };
+
+extern inline int memory_region_cnt = 0;
 extern inline PMEMORY_REGION memory_regions = NULL;
+
+// this container holds a pointer to a large contiguous physical page where PTs can be taken from for page splitting
+extern inline EPT_PTE_BUFFER ept_pte_buffer = { 0 };
 
 bool mtrr_support();
 void populate_mtrr_regions();
+UINT8 get_fixed_mtrr_type(UINT64 physical_address);
 void initialize_eptp();
+// splits a 2mb large page into 512 4kb pages keeping the same access rights, returns the new PT
+PEPT_PTE split_pde(int pd_idx);
