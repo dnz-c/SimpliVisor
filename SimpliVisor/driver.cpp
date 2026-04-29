@@ -81,6 +81,7 @@ NTSTATUS mj_close(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	stackLocation = IoGetCurrentIrpStackLocation(Irp);
 
 	run_on_all_cores(exit_vmx_operation);
+	run_on_all_cores(free_ept_pages);
 	free_vmx_regions();
 
 	Irp->IoStatus.Information = 0;

@@ -133,6 +133,7 @@ bool setup_core_eptp(int core)
 	}
 	RtlSecureZeroMemory(pml4, PAGE_SIZE);
 	DbgPrint("EPT PML4 @ %p\n", pml4);
+	g_vcpus[core].v_ept_pml4 = pml4;
 
 	// link eptp -> pml4
 	UINT64 pml4_phys = MmGetPhysicalAddress(pml4).QuadPart;
@@ -147,6 +148,7 @@ bool setup_core_eptp(int core)
 	}
 	RtlSecureZeroMemory(pdpt, PAGE_SIZE);
 	DbgPrint("EPT PDPT @ %p\n", pml4);
+	g_vcpus[core].v_ept_pdpt = pdpt;
 
 	// link pml4 -> pdpt
 	pml4[0].fields.read_access = 1;
@@ -350,6 +352,20 @@ PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical)
 	if (pde.fields.page_size == 0) return NULL; // the page has been split
 
 	return &g_vcpus[core].pdes[pd_idx];
+}
+
+bool free_ept_pages(int core)
+{
+	DbgPrint("freing EPT page layers\n");
+	if (g_vcpus[core].v_ept_pml4)
+		MmFreeContiguousMemory(g_vcpus[core].v_ept_pml4);
+	if (g_vcpus[core].v_ept_pdpt)
+		MmFreeContiguousMemory(g_vcpus[core].v_ept_pdpt);
+	if (g_vcpus[core].pdes)
+		MmFreeContiguousMemory(g_vcpus[core].pdes);
+	if (g_vcpus[core].ept_pte_buffer.start_virt_address)
+		MmFreeContiguousMemory((PVOID)g_vcpus[core].ept_pte_buffer.start_virt_address);
+	return true;
 }
 
 /* 

@@ -39,10 +39,10 @@ struct VCPU
     UINT64 p_msr_bitmap;
     UINT64 host_stack;
 
+    PVOID v_ept_pml4;
+    PVOID v_ept_pdpt;
     PEPT_PDE_2MB pdes = NULL;
     EPTP eptp = { 0 };
-
-    // this container holds a pointer to a large contiguous physical page where PTs can be taken from for page splitting
     EPT_PTE_BUFFER ept_pte_buffer = { 0 };
 
     HOST_PROCESSOR_DATA processor_data;

@@ -290,3 +290,5 @@ PEPT_PTE split_pde(UINT32 core, UINT64 pd_idx);
 PEPT_PTE get_ept_pte(UINT32 core, UINT64 guest_physical);
 // will return NULL if the PDE has been split
 PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical);
+
+bool free_ept_pages(int core);
