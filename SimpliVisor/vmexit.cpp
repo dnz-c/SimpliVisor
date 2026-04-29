@@ -11,6 +11,9 @@ bool vmexit_handler(PGUEST_REGS regs)
     ctx.advance_rip = true;
     ctx.invalidate_tlb = false;
 
+    PHOST_PROCESSOR_DATA host_data = (PHOST_PROCESSOR_DATA) __readmsr(FS_BASE);
+    ctx.host_data = host_data;
+
     size_t exit_reason;
     __vmx_vmread(VM_EXIT_REASON, &exit_reason);
 
@@ -18,11 +21,15 @@ bool vmexit_handler(PGUEST_REGS regs)
     {
         g_vmexit_handlers[exit_reason](&ctx);
     }
+    else
+    {
+        handle_unsupported(&ctx);
+    }
 
     if (ctx.invalidate_tlb)
     {
         INVEPT_DESCRIPTOR desc = { 0 };
-        desc.eptp = g_eptp.all;
+        desc.eptp = g_vcpus[ctx.host_data->core_index].eptp.all;
         asm_invept(1, &desc);
     }
 

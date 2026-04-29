@@ -58,7 +58,7 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	}
 
 	populate_mtrr_regions();
-	initialize_eptp();
+	init_all_core_eptp();
 	allocate_vmx_regions();
 	init_vmexit_dispatch_table();
 

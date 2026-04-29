@@ -3,6 +3,7 @@
 #include <ntddk.h>
 #include <intrin.h>
 #include <cmath>
+#include "driver.h"
 
 #define MAX_VMEXIT_REASON 75
 
@@ -29,6 +30,7 @@ typedef struct _GUEST_REGS
 
 typedef struct _EXIT_CONTEXT
 {
+    PHOST_PROCESSOR_DATA host_data;
     PGUEST_REGS regs;
     BOOLEAN invalidate_tlb;
     BOOLEAN advance_rip;

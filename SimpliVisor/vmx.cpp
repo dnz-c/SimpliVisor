@@ -284,7 +284,7 @@ ULONG adjust_controls(ULONG ctl, ULONG msr)
 
 void setup_vmcs(int core, ULONG64 rsp)
 {
-	__vmx_vmwrite(EPT_POINTER, g_eptp.all);
+	__vmx_vmwrite(EPT_POINTER, g_vcpus[core].eptp.all);
 
 	__vmx_vmwrite(HOST_ES_SELECTOR, get_es() & 0xF8);
 	__vmx_vmwrite(HOST_CS_SELECTOR, get_cs() & 0xF8);
@@ -326,6 +326,11 @@ void setup_vmcs(int core, ULONG64 rsp)
 
 	__vmx_vmwrite(HOST_FS_BASE, __readmsr(FS_BASE));
 	__vmx_vmwrite(HOST_GS_BASE, __readmsr(GS_BASE));
+
+	// store host processor data in FS
+	g_vcpus[core].processor_data.core_index = core;
+	__vmx_vmwrite(HOST_FS_SELECTOR, 0);
+	__vmx_vmwrite(HOST_FS_BASE, (size_t) & g_vcpus[core].processor_data);
 
 	__vmx_vmwrite(VM_ENTRY_INTR_INFO, 0);
 

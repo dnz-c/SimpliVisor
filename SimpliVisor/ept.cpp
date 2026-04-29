@@ -106,7 +106,12 @@ UINT8 get_fixed_mtrr_type(UINT64 physical_address)
 	return (UINT8) ((msr_value >> (type_index * 8)) & 0xFF);
 }
 
-void initialize_eptp()
+void init_all_core_eptp()
+{
+	run_on_all_cores(setup_core_eptp);
+}
+
+bool setup_core_eptp(int core)
 {
 	IA32_VMX_EPT_VPID_CAP_MSR vmx_ept_vpid_cap;
 	vmx_ept_vpid_cap.all = __readmsr(IA32_VMX_EPT_VPID_CAP);
@@ -124,7 +129,7 @@ void initialize_eptp()
 	if (pml4 == NULL)
 	{
 		DbgPrint("Failed to allocate pml4 pool\n");
-		return;
+		return false;
 	}
 	RtlSecureZeroMemory(pml4, PAGE_SIZE);
 	DbgPrint("EPT PML4 @ %p\n", pml4);
@@ -138,7 +143,7 @@ void initialize_eptp()
 	if (pdpt == NULL)
 	{
 		DbgPrint("Failed to allocate pdpt pool\n");
-		return;
+		return false;
 	}
 	RtlSecureZeroMemory(pdpt, PAGE_SIZE);
 	DbgPrint("EPT PDPT @ %p\n", pml4);
@@ -152,14 +157,14 @@ void initialize_eptp()
 	pml4[0].fields.pfn = pdpt_phys / PAGE_SIZE;
 
 	// allocate 512 pages for pdes mapping 512 * 2mb each
-	g_pdes = (PEPT_PDE_2MB)MmAllocateContiguousMemory(PAGE_SIZE * 512, max_phys);
-	if (g_pdes == NULL)
+	g_vcpus[core].pdes = (PEPT_PDE_2MB)MmAllocateContiguousMemory(PAGE_SIZE * 512, max_phys);
+	if (g_vcpus[core].pdes == NULL)
 	{
 		DbgPrint("Failed to allocate pdpt pool\n");
-		return;
+		return false;
 	}
-	RtlSecureZeroMemory(g_pdes, PAGE_SIZE * 512);
-	DbgPrint("EPT 512x PDEs @ %p\n", g_pdes);
+	RtlSecureZeroMemory(g_vcpus[core].pdes, PAGE_SIZE * 512);
+	DbgPrint("EPT 512x PDEs @ %p\n", g_vcpus[core].pdes);
 
 	// link pdpt -> pd
 	for (size_t i = 0; i < 512; i++)
@@ -169,7 +174,7 @@ void initialize_eptp()
 		pdpte.fields.write_access = 1;
 		pdpte.fields.execute_access = 1;
 
-		UINT64 pd_phys = MmGetPhysicalAddress(g_pdes).QuadPart;
+		UINT64 pd_phys = MmGetPhysicalAddress(g_vcpus[core].pdes).QuadPart;
 		pdpte.fields.pfn = (pd_phys + (i * PAGE_SIZE)) / PAGE_SIZE;
 
 		pdpt[i].all = pdpte.all;
@@ -218,34 +223,34 @@ void initialize_eptp()
 		}
 
 		pde.fields.memory_type = cache_candidate;
-		g_pdes[idx_pd].all = pde.all;
+		g_vcpus[core].pdes[idx_pd].all = pde.all;
 	}
 
 	PVOID pte_buffer = MmAllocateContiguousMemory(PAGE_SIZE * PTES_TO_ALLOCATE, max_phys);
 	if (pte_buffer == NULL)
 	{
 		DbgPrint("Failed to allocate pte buffer\n");
-		return;
+		return false;
 	}
 	RtlSecureZeroMemory(pte_buffer, PAGE_SIZE * PTES_TO_ALLOCATE);
 
 	DbgPrint("PTE Buffer @ %p\n", pte_buffer);
 
-	ept_pte_buffer.start_phys_address = MmGetPhysicalAddress(pte_buffer).QuadPart;
-	ept_pte_buffer.start_virt_address = (UINT64)pte_buffer;
-	ept_pte_buffer.curr_virt_address = (UINT64)pte_buffer;
-	ept_pte_buffer.size = PAGE_SIZE * PTES_TO_ALLOCATE;
+	g_vcpus[core].ept_pte_buffer.start_phys_address = MmGetPhysicalAddress(pte_buffer).QuadPart;
+	g_vcpus[core].ept_pte_buffer.start_virt_address = (UINT64)pte_buffer;
+	g_vcpus[core].ept_pte_buffer.curr_virt_address = (UINT64)pte_buffer;
+	g_vcpus[core].ept_pte_buffer.size = PAGE_SIZE * PTES_TO_ALLOCATE;
 
 	_IA32_MTRRCAP_MSR mtrrcap;
 	mtrrcap.all = __readmsr(IA32_MTRRCAP);
 	if (mtrrcap.fields.fix)
 	{
 		// handle fixed size MTRR regions across the first mb of ram
-		PEPT_PTE split_pt = split_pde(0);
+		PEPT_PTE split_pt = split_pde(core, 0);
 		if (!split_pt)
 		{
 			DbgPrint("Failed to split first PDE!\n");
-			return;
+			return false;
 		}
 
 		for (size_t i = 0; i < 512; i++)
@@ -257,26 +262,27 @@ void initialize_eptp()
 			pte.fields.memory_type = fixed_type;
 			split_pt[i] = pte;
 
-			DbgPrint("applied fixed tpye: %d to page: %llx\n", fixed_type, pte.fields.pfn * PAGE_SIZE);
+			//DbgPrint("applied fixed tpye: %d to page: %llx\n", fixed_type, pte.fields.pfn * PAGE_SIZE);
 		}
 	}
 
 	DbgPrint("using eptp configuration %llx\n", eptp.all);
-	g_eptp.all = eptp.all;
+	g_vcpus[core].eptp.all = eptp.all;
+	return true;
 }
 
-PEPT_PTE split_pde(UINT64 pd_idx)
+PEPT_PTE split_pde(UINT32 core, UINT64 pd_idx)
 {
 	if (pd_idx >= 512 * 512) return NULL;
 
-	EPT_PDE_2MB ept_pde_2mb = g_pdes[pd_idx];
+	EPT_PDE_2MB ept_pde_2mb = g_vcpus[core].pdes[pd_idx];
 
 	PHYSICAL_ADDRESS max_phys = { 0 };
 	max_phys.QuadPart = MAXULONG64;
 	
 	// since we cant call any os mem alloc functions in vmx root mode we have to grab the memory from our pre allocated buffer
-	UINT64 allocated_pt_addr = (UINT64) InterlockedExchangeAdd64((LONG64*) &ept_pte_buffer.curr_virt_address, PAGE_SIZE);
-	if (allocated_pt_addr >= ept_pte_buffer.start_virt_address + ept_pte_buffer.size)
+	UINT64 allocated_pt_addr = (UINT64) InterlockedExchangeAdd64((LONG64*) &g_vcpus[core].ept_pte_buffer.curr_virt_address, PAGE_SIZE);
+	if (allocated_pt_addr >= g_vcpus[core].ept_pte_buffer.start_virt_address + g_vcpus[core].ept_pte_buffer.size)
 	{
 		DbgPrint("exhausted PT pool, cannot split page %d\n", pd_idx); // UNSAFE in VMX Root
 		return NULL;
@@ -303,16 +309,16 @@ PEPT_PTE split_pde(UINT64 pd_idx)
 	ept_pde_split.fields.execute_access = ept_pde_2mb.fields.execute_access;
 	ept_pde_split.fields.page_size = 0;
 
-	UINT64 offset = allocated_pt_addr - ept_pte_buffer.start_virt_address;
-	UINT64 pt_phys = ept_pte_buffer.start_phys_address + offset;
+	UINT64 offset = allocated_pt_addr - g_vcpus[core].ept_pte_buffer.start_virt_address;
+	UINT64 pt_phys = g_vcpus[core].ept_pte_buffer.start_phys_address + offset;
 	ept_pde_split.fields.pfn = pt_phys / PAGE_SIZE;
 
-	InterlockedExchange64((LONG64*) & g_pdes[pd_idx], ept_pde_split.all);
+	InterlockedExchange64((LONG64*) &g_vcpus[core].pdes[pd_idx], ept_pde_split.all);
 
 	return pt;
 }
 
-PEPT_PTE get_ept_pte(UINT64 guest_physical)
+PEPT_PTE get_ept_pte(UINT32 core, UINT64 guest_physical)
 {
 	int pd_idx = guest_physical / PDE_PAGE_SIZE;
 	int pt_idx = (guest_physical % PDE_PAGE_SIZE) / PAGE_SIZE;
@@ -321,29 +327,29 @@ PEPT_PTE get_ept_pte(UINT64 guest_physical)
 	if (pt_idx >= 512) return NULL;
 
 	EPT_PDE pde = { 0 };
-	pde.all = g_pdes[pd_idx].all;
+	pde.all = g_vcpus[core].pdes[pd_idx].all;
 
 	if (pde.fields.page_size == 1) return NULL; // the page has not been split yet
 
 	UINT64 pt_phys = pde.fields.pfn * PAGE_SIZE;
-	UINT64 offset = pt_phys - ept_pte_buffer.start_phys_address;
-	PEPT_PTE pt = (PEPT_PTE) (ept_pte_buffer.start_virt_address + offset);
+	UINT64 offset = pt_phys - g_vcpus[core].ept_pte_buffer.start_phys_address;
+	PEPT_PTE pt = (PEPT_PTE) (g_vcpus[core].ept_pte_buffer.start_virt_address + offset);
 	
 	return &pt[pt_idx];
 }
 
-PEPT_PDE_2MB get_ept_pde(UINT64 guest_physical)
+PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical)
 {
 	int pd_idx = guest_physical / PDE_PAGE_SIZE;
 
 	if (pd_idx >= 512 * 512) return NULL;
 
 	EPT_PDE_2MB pde = { 0 };
-	pde.all = g_pdes[pd_idx].all;
+	pde.all = g_vcpus[core].pdes[pd_idx].all;
 
 	if (pde.fields.page_size == 0) return NULL; // the page has been split
 
-	return &g_pdes[pd_idx];
+	return &g_vcpus[core].pdes[pd_idx];
 }
 
 /* 

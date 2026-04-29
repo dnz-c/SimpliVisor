@@ -3,6 +3,7 @@
 #include <wdm.h>
 #include <intrin.h>
 #include <cmath>
+#include "ept.h"
 
 __forceinline ULONG64 int_power(ULONG64 base, ULONG64 exp) {
     ULONG64 result = 1;
@@ -23,6 +24,11 @@ using function_t = bool(*)(int);
 void run_on_all_cores(function_t func);
 void run_on_single_core(function_t func, int core);
 
+typedef struct _HOST_PROCESSOR_DATA
+{
+    UINT32 core_index;
+} HOST_PROCESSOR_DATA, * PHOST_PROCESSOR_DATA;
+
 struct VCPU
 {
     PVOID v_vmxon_region;
@@ -32,6 +38,14 @@ struct VCPU
     UINT64 p_vmcs_region;
     UINT64 p_msr_bitmap;
     UINT64 host_stack;
+
+    PEPT_PDE_2MB pdes = NULL;
+    EPTP eptp = { 0 };
+
+    // this container holds a pointer to a large contiguous physical page where PTs can be taken from for page splitting
+    EPT_PTE_BUFFER ept_pte_buffer = { 0 };
+
+    HOST_PROCESSOR_DATA processor_data;
 };
 
 extern inline VCPU* g_vcpus = NULL;

@@ -274,22 +274,19 @@ extern "C"
     void asm_invept(UINT32 type, PINVEPT_DESCRIPTOR descriptor);
 }
 
-extern inline PEPT_PDE_2MB g_pdes = NULL;
-extern inline EPTP g_eptp = { 0 };
-
 extern inline int memory_region_cnt = 0;
 extern inline PMEMORY_REGION memory_regions = NULL;
-
-// this container holds a pointer to a large contiguous physical page where PTs can be taken from for page splitting
-extern inline EPT_PTE_BUFFER ept_pte_buffer = { 0 };
 
 bool mtrr_support();
 void populate_mtrr_regions();
 UINT8 get_fixed_mtrr_type(UINT64 physical_address);
-void initialize_eptp();
+
+void init_all_core_eptp();
+bool setup_core_eptp(int core);
+
 // splits a 2mb large page into 512 4kb pages keeping the same access rights, returns the new PT
-PEPT_PTE split_pde(UINT64 pd_idx);
+PEPT_PTE split_pde(UINT32 core, UINT64 pd_idx);
 // will return NULL if the PDE has not been split
-PEPT_PTE get_ept_pte(UINT64 guest_physical);
+PEPT_PTE get_ept_pte(UINT32 core, UINT64 guest_physical);
 // will return NULL if the PDE has been split
-PEPT_PDE_2MB get_ept_pde(UINT64 guest_physical);
+PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical);

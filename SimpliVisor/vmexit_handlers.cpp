@@ -54,6 +54,8 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
 {
     if (ctx->regs->rcx == VMCALL_EXITVM)
     {
+        DbgPrint("VMEXIT on core: %d\n", ctx->host_data->core_index);
+
         UINT64 guest_rsp, guest_rip, guest_eflags, guest_cs, guest_ss;
         __vmx_vmread(GUEST_RSP, &guest_rsp);
         __vmx_vmread(GUEST_RIP, &guest_rip);
@@ -65,6 +67,10 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
         size_t inst_len;
         __vmx_vmread(VM_EXIT_INSTRUCTION_LEN, &inst_len);
         guest_rip += inst_len;
+
+        size_t guest_fs_base, guest_fs_selector;
+        __vmx_vmread(GUEST_FS_BASE, &guest_fs_base);
+        __writemsr(FS_BASE, guest_fs_base);
 
         __vmx_off();
 
@@ -98,7 +104,7 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
     size_t faulting_phys_addr = 0;
     __vmx_vmread(GUEST_PHYSICAL_ADDRESS, &faulting_phys_addr);
 
-    PEPT_PTE pte = get_ept_pte(faulting_phys_addr);
+    PEPT_PTE pte = get_ept_pte(ctx->host_data->core_index, faulting_phys_addr);
     if (!pte)
         goto Exit;
 
