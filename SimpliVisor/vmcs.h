@@ -208,5 +208,24 @@ enum EXIT_REASON
     VMCALL = 0x12,
     RDMSR = 0x1F,
     WRMSR = 0x20,
+    MTF = 0x25,
     EPT_VIOLATION = 0x30,
 };
+
+typedef union _EPT_VIOLATION_QUALIFICATION
+{
+    ULONG64 all;
+    struct
+    {
+        ULONG64 read_access : 1; // 0: Violation caused by a read
+        ULONG64 write_access : 1; // 1: Violation caused by a write
+        ULONG64 execute_access : 1; // 2: Violation caused by an instruction fetch
+        ULONG64 ept_readable : 1; // 3: The EPT page was readable
+        ULONG64 ept_writeable : 1; // 4: The EPT page was writeable
+        ULONG64 ept_executable : 1; // 5: The EPT page was executable
+        ULONG64 reserved1 : 1; // 6: Reserved
+        ULONG64 gla_valid : 1; // 7: Guest Linear Address valid
+        ULONG64 advanced_vmexit : 1; // 8: If GLA valid, advanced VM-exit info
+        ULONG64 reserved2 : 55;
+    } fields;
+} EPT_VIOLATION_QUALIFICATION;

@@ -14,6 +14,7 @@ void init_vmexit_dispatch_table()
     g_vmexit_handlers[EXIT_REASON::VMCALL] = handle_vmcall;
     g_vmexit_handlers[EXIT_REASON::RDMSR] = handle_rdmsr;
     g_vmexit_handlers[EXIT_REASON::WRMSR] = handle_wrmsr;
+    g_vmexit_handlers[EXIT_REASON::MTF] = handle_mtf;
     g_vmexit_handlers[EXIT_REASON::EPT_VIOLATION] = handle_ept_violation;
 }
 
@@ -115,26 +116,66 @@ void handle_wrmsr(PEXIT_CONTEXT ctx)
     }
 }
 
+void handle_mtf(PEXIT_CONTEXT ctx)
+{
+    PEPT_PTE pte = g_vcpus[ctx->host_data->core_index].mtf_target_pte;
+
+    if (pte)
+    {
+        pte->fields.pfn = g_vcpus[ctx->host_data->core_index].mtf_restore_pfn;
+
+        pte->fields.read_access = 1;
+        pte->fields.write_access = 1;
+        pte->fields.execute_access = 0;
+
+        g_vcpus[ctx->host_data->core_index].mtf_target_pte = NULL;
+        g_vcpus[ctx->host_data->core_index].mtf_restore_pfn = 0;
+    }
+
+    // disable mtf
+    size_t exec_ctrl = 0;
+    __vmx_vmread(CPU_BASED_VM_EXEC_CONTROL, &exec_ctrl);
+    exec_ctrl &= ~CPU_BASED_MONITOR_TRAP_FLAG;
+    __vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, exec_ctrl);
+
+    ctx->invalidate_tlb = true;
+    ctx->advance_rip = false;
+}
+
 void handle_ept_violation(PEXIT_CONTEXT ctx)
 {
+    ctx->invalidate_tlb = true;
+    ctx->advance_rip = false;
+
     size_t faulting_phys_addr = 0;
     __vmx_vmread(GUEST_PHYSICAL_ADDRESS, &faulting_phys_addr);
 
+    EPT_VIOLATION_QUALIFICATION qualification = { 0 };
+    __vmx_vmread(EXIT_QUALIFICATION, &qualification.all);
+
     PEPT_PTE pte = get_ept_pte(ctx->host_data->core_index, faulting_phys_addr);
     if (!pte)
-        goto Exit;
+        return;
 
-    DbgPrint("CAUGHT EPT VIOLATION!\n");
-    DbgPrint("Faulting Physical Addr: 0x%llX\n", faulting_phys_addr);
+    g_vcpus[ctx->host_data->core_index].mtf_target_pte = pte;
+    g_vcpus[ctx->host_data->core_index].mtf_restore_pfn = pte->fields.pfn;
 
-    pte->fields.pfn = g_vcpus[ctx->host_data->core_index].shadow_page_phys / PAGE_SIZE;
-    pte->fields.execute_access = 1;
+    // check if this is a function we have a hook on / want to hide
+    UINT64 shadow_pfn = 0;
+    if (!get_in_hashmap(g_hook_map, pte->fields.pfn, &shadow_pfn))
+        return;
 
-    DbgPrint("Restored permissions on PTE %p\n", pte);
+    if (qualification.fields.execute_access)
+    {
+        pte->fields.pfn = shadow_pfn;
+        pte->fields.execute_access = 1;
 
-    Exit:
-    ctx->invalidate_tlb = true;
-    ctx->advance_rip = false;
+        // enable MTF so we instantly vmexit on the next instruction
+        size_t exec_ctrl = 0;
+        __vmx_vmread(CPU_BASED_VM_EXEC_CONTROL, &exec_ctrl);
+        exec_ctrl |= CPU_BASED_MONITOR_TRAP_FLAG;
+        __vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, exec_ctrl);
+    }
 }
 
 void handle_unsupported(PEXIT_CONTEXT ctx)

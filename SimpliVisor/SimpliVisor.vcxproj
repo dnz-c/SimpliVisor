@@ -136,6 +136,7 @@
     <ClInclude Include="driver.h" />
     <ClInclude Include="ept.h" />
     <ClInclude Include="hde.h" />
+    <ClInclude Include="km_hashmap.hpp" />
     <ClInclude Include="vmcs.h" />
     <ClInclude Include="vmexit_handlers.h" />
     <ClInclude Include="vmx.h" />

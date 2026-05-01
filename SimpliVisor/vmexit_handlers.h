@@ -45,5 +45,6 @@ void handle_cpuid(PEXIT_CONTEXT ctx);
 void handle_vmcall(PEXIT_CONTEXT ctx);
 void handle_rdmsr(PEXIT_CONTEXT ctx);
 void handle_wrmsr(PEXIT_CONTEXT ctx);
+void handle_mtf(PEXIT_CONTEXT ctx);
 void handle_ept_violation(PEXIT_CONTEXT ctx);
 void handle_unsupported(PEXIT_CONTEXT ctx);

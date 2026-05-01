@@ -48,8 +48,8 @@ struct VCPU
 
     HOST_PROCESSOR_DATA processor_data;
 
-    UINT64 shadow_page_phys = 0;
-    UINT64 orig_page_phys = 0;
+    PEPT_PTE mtf_target_pte;
+    UINT64 mtf_restore_pfn;
 };
 
 extern inline VCPU* g_vcpus = NULL;

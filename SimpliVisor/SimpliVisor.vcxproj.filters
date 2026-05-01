@@ -59,6 +59,9 @@
     <ClInclude Include="hde.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="km_hashmap.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="asm_vmx.asm">

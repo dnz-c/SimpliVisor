@@ -109,6 +109,7 @@ UINT8 get_fixed_mtrr_type(UINT64 physical_address)
 
 void init_all_core_eptp()
 {
+	g_hook_map = init_hash_map(PTES_TO_ALLOCATE);
 	run_on_all_cores(setup_core_eptp);
 }
 
@@ -411,8 +412,7 @@ void install_ept_hook(UINT64 phys_target_address, UINT64 virt_target_address, UI
 	UINT64 offset = shadow_page - g_vcpus[core].ept_pte_buffer.start_virt_address;
 	UINT64 shadow_page_phys = g_vcpus[core].ept_pte_buffer.start_phys_address + offset;
 
-	g_vcpus[core].shadow_page_phys = shadow_page_phys;
-	g_vcpus[core].orig_page_phys = pte->fields.pfn * 0x1000;
+	insert_in_hashmap(g_hook_map, pte->fields.pfn, shadow_page_phys / PAGE_SIZE);
 
 	pte->fields.execute_access = 0; // arm the hook
 }

@@ -5,6 +5,8 @@
 #include <intrin.h>
 #include <cmath>
 
+#include "km_hashmap.hpp"
+
 // number of PTs to allocate for later splitting
 #define PTES_TO_ALLOCATE        0x10
 
@@ -276,6 +278,7 @@ extern "C"
 
 extern inline int memory_region_cnt = 0;
 extern inline PMEMORY_REGION memory_regions = NULL;
+extern inline PLINEAR_64b_HASH_MAP g_hook_map = NULL; // stores original pfn -> shadow pfn mappings
 
 bool mtrr_support();
 void populate_mtrr_regions();
