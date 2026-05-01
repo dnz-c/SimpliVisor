@@ -1,6 +1,7 @@
 #include "ept.h"
 #include "driver.h"
 #include "vmx.h"
+#include "hde.h"
 
 bool mtrr_support()
 {
@@ -354,6 +355,68 @@ PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical)
 	return &g_vcpus[core].pdes[pd_idx];
 }
 
+void write_absolute_jmp(UINT64 write_location, UINT64 destination_address)
+{
+	UINT8 jmp_shellcode[] = {
+		0xFF, 0x25, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+	};
+
+	*(UINT64*) (&jmp_shellcode[6]) = destination_address;
+
+	memcpy((PVOID) write_location, jmp_shellcode, sizeof(jmp_shellcode));
+}
+
+void install_ept_hook(UINT64 phys_target_address, UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core)
+{
+	int pd_idx = phys_target_address / PDE_PAGE_SIZE;
+	int pt_idx = (phys_target_address % PDE_PAGE_SIZE) / PAGE_SIZE;
+
+	PEPT_PTE pte = get_ept_pte(core, phys_target_address);
+	if (!pte)
+	{
+		PEPT_PTE pt = split_pde(core, pd_idx);
+		pte = &pt[pt_idx];
+	}
+
+	// build the "shadow" page
+	UINT64 shadow_page = (UINT64) InterlockedExchangeAdd64((LONG64*) &g_vcpus[core].ept_pte_buffer.curr_virt_address, PAGE_SIZE);
+	if (shadow_page >= g_vcpus[core].ept_pte_buffer.start_virt_address + g_vcpus[core].ept_pte_buffer.size)
+	{
+		DbgPrint("exhausted PT pool, cannot allocate shadow page %d\n", pt_idx); // UNSAFE in VMX Root
+		return;
+	}
+
+	UINT64 page_aligned_target = virt_target_address & ~0xFFFull;
+	memcpy((PVOID) shadow_page, (PVOID) page_aligned_target, PAGE_SIZE);
+
+	UINT64 page_offset = virt_target_address & 0xFFF;
+	UINT64 shadow_func_ptr = (UINT64) (shadow_page + page_offset);
+	
+	UINT32 stolen_length = 0;
+	while (stolen_length < 14)
+	{
+		hde64s hs;
+		hde64_disasm((PVOID)(shadow_func_ptr + stolen_length), &hs);
+		stolen_length += hs.len;
+	}
+
+	memcpy((PVOID)tramp_buffer, (PVOID)shadow_func_ptr, stolen_length);
+
+	UINT64 return_address = virt_target_address + stolen_length;
+	write_absolute_jmp(tramp_buffer + stolen_length, return_address); // jump back to function
+
+	write_absolute_jmp(shadow_func_ptr, destination);
+
+	UINT64 offset = shadow_page - g_vcpus[core].ept_pte_buffer.start_virt_address;
+	UINT64 shadow_page_phys = g_vcpus[core].ept_pte_buffer.start_phys_address + offset;
+
+	g_vcpus[core].shadow_page_phys = shadow_page_phys;
+	g_vcpus[core].orig_page_phys = pte->fields.pfn * 0x1000;
+
+	pte->fields.execute_access = 0; // arm the hook
+}
+
 bool free_ept_pages(int core)
 {
 	DbgPrint("freing EPT page layers\n");
@@ -367,8 +430,3 @@ bool free_ept_pages(int core)
 		MmFreeContiguousMemory((PVOID)g_vcpus[core].ept_pte_buffer.start_virt_address);
 	return true;
 }
-
-/* 
-TODO:	Add proper devirtualize routine to discard all allocated pages aswell as all split pages
-			- Find some way to track split up pages and write a helper to get the pt or pd from a phys address
-*/

@@ -52,7 +52,9 @@ void handle_cpuid(PEXIT_CONTEXT ctx)
 
 void handle_vmcall(PEXIT_CONTEXT ctx)
 {
-    if (ctx->regs->rcx == VMCALL_EXITVM)
+    switch (ctx->regs->rcx)
+    {
+    case VMCALL_EXITVM:
     {
         DbgPrint("VMEXIT on core: %d\n", ctx->host_data->core_index);
 
@@ -76,8 +78,22 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
 
         asm_exit_vm(guest_rip, guest_rsp, guest_eflags, guest_cs, guest_ss, ctx->regs);
 
-        // we will never reach this part of code, if we do our iretq stack frame is messed up and we can't do anything
+        // we will never reach this part of code, if we do our iretq stack frame is messed up and we dont know where to go
         DbgBreakPoint();
+    }
+        break;
+    case VMCALL_INSTALLHOOK:
+    {
+        UINT64 virt_target = ctx->regs->rdx;
+        UINT64 destination = ctx->regs->r8;
+        UINT64 tramp_buffer = ctx->regs->r9;
+        UINT64 phys_target = ctx->regs->r10;
+
+        install_ept_hook(phys_target, virt_target, destination, tramp_buffer, ctx->host_data->core_index);
+
+        ctx->invalidate_tlb = true;
+    }
+        break;
     }
 }
 
@@ -111,8 +127,8 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
     DbgPrint("CAUGHT EPT VIOLATION!\n");
     DbgPrint("Faulting Physical Addr: 0x%llX\n", faulting_phys_addr);
 
-    pte->fields.read_access = 1;
-    pte->fields.write_access = 1;
+    pte->fields.pfn = g_vcpus[ctx->host_data->core_index].shadow_page_phys / PAGE_SIZE;
+    pte->fields.execute_access = 1;
 
     DbgPrint("Restored permissions on PTE %p\n", pte);
 

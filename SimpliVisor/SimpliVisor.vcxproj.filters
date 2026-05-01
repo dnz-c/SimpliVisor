@@ -56,6 +56,9 @@
     <ClInclude Include="vmexit_handlers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="hde.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="asm_vmx.asm">

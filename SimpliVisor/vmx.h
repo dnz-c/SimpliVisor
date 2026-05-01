@@ -7,6 +7,7 @@
 #include "vmexit_handlers.h"
 
 #define VMCALL_EXITVM 0x1337
+#define VMCALL_INSTALLHOOK 0x1338
 
 // MSRs
 #define IA32_FEATURE_CONTROL            0x3A
@@ -127,7 +128,7 @@ extern "C"
 {
     PHYSICAL_ADDRESS MmGetPhysicalAddress(PVOID BaseAddress);
     
-    void asm_vmcall(UINT64 arg1);
+    void asm_vmcall(UINT64 reason, UINT64 arg1, UINT64 arg2, UINT64 arg3, UINT64 arg4);
     
     bool asm_virtualize_core(int core);
     void asm_vmx_restore_state(void);

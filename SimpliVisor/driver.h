@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ntddk.h>
 #include <wdm.h>
 #include <intrin.h>
 #include <cmath>
@@ -46,6 +47,9 @@ struct VCPU
     EPT_PTE_BUFFER ept_pte_buffer = { 0 };
 
     HOST_PROCESSOR_DATA processor_data;
+
+    UINT64 shadow_page_phys = 0;
+    UINT64 orig_page_phys = 0;
 };
 
 extern inline VCPU* g_vcpus = NULL;
