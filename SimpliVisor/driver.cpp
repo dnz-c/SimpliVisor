@@ -3,6 +3,8 @@
 #include "ept.h"
 #include "vmexit_handlers.h"
 
+#include "memory.h"
+
 void run_on_all_cores(function_t func)
 {
 	KAFFINITY AffinityMask;
@@ -118,13 +120,19 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 
 	ULONG processor_count = KeQueryActiveProcessorCount(NULL);
 
+	g_vcpus = (VCPU*) ExAllocatePool(NonPagedPool, processor_count * sizeof(VCPU));
+	RtlSecureZeroMemory(g_vcpus, processor_count * sizeof(VCPU));
+
+	run_on_all_cores(setup_hv_phys_window);
+	test_hv_phys_window();
+
+	goto Exit;
+
 	if (!vmx_supported())
 	{
 		DbgPrint("VMX Operation is not supported on this CPU\n");
 		goto Exit;
 	}
-
-	g_vcpus = (VCPU*) ExAllocatePool(NonPagedPool, processor_count * sizeof(VCPU));
 
 	if (!mtrr_support())
 	{
@@ -132,14 +140,14 @@ NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 		goto Exit;
 	}
 
-	populate_mtrr_regions();
-	init_all_core_eptp();
-	allocate_vmx_regions();
-	init_vmexit_dispatch_table();
-
-	run_on_all_cores(asm_virtualize_core);
-
-	test_hook();
+	//populate_mtrr_regions();
+	//init_all_core_eptp();
+	//allocate_vmx_regions();
+	//init_vmexit_dispatch_table();
+	//
+	//run_on_all_cores(asm_virtualize_core);
+	//
+	//test_hook();
 
 	Exit:
 	Irp->IoStatus.Information = 0;
@@ -157,9 +165,9 @@ NTSTATUS mj_close(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	PIO_STACK_LOCATION stackLocation = NULL;
 	stackLocation = IoGetCurrentIrpStackLocation(Irp);
 
-	run_on_all_cores(exit_vmx_operation);
-	run_on_all_cores(free_ept_pages);
-	free_vmx_regions();
+	//run_on_all_cores(exit_vmx_operation);
+	//run_on_all_cores(free_ept_pages);
+	//free_vmx_regions();
 
 	Irp->IoStatus.Information = 0;
 	Irp->IoStatus.Status = STATUS_SUCCESS;

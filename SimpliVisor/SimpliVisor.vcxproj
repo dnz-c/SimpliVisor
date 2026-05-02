@@ -128,6 +128,7 @@
   <ItemGroup>
     <ClCompile Include="driver.cpp" />
     <ClCompile Include="ept.cpp" />
+    <ClCompile Include="memory.cpp" />
     <ClCompile Include="vmexit.cpp" />
     <ClCompile Include="vmexit_handlers.cpp" />
     <ClCompile Include="vmx.cpp" />
@@ -137,6 +138,7 @@
     <ClInclude Include="ept.h" />
     <ClInclude Include="hde.h" />
     <ClInclude Include="km_hashmap.hpp" />
+    <ClInclude Include="memory.h" />
     <ClInclude Include="vmcs.h" />
     <ClInclude Include="vmexit_handlers.h" />
     <ClInclude Include="vmx.h" />

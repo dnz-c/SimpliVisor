@@ -39,6 +39,9 @@
     <ClCompile Include="vmexit_handlers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="memory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="driver.h">
@@ -60,6 +63,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="km_hashmap.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="memory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
