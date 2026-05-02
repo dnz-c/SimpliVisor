@@ -88,9 +88,11 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
         UINT64 virt_target = ctx->regs->rdx;
         UINT64 destination = ctx->regs->r8;
         UINT64 tramp_buffer = ctx->regs->r9;
-        UINT64 phys_target = ctx->regs->r10;
 
-        install_ept_hook(phys_target, virt_target, destination, tramp_buffer, ctx->host_data->core_index);
+        UINT64 cr3;
+        __vmx_vmread(GUEST_CR3, &cr3);
+
+        install_ept_hook(virt_target, destination, tramp_buffer, ctx->host_data->core_index, cr3);
 
         ctx->invalidate_tlb = true;
     }
@@ -144,9 +146,6 @@ void handle_mtf(PEXIT_CONTEXT ctx)
 
 void handle_ept_violation(PEXIT_CONTEXT ctx)
 {
-    ctx->invalidate_tlb = true;
-    ctx->advance_rip = false;
-
     size_t faulting_phys_addr = 0;
     __vmx_vmread(GUEST_PHYSICAL_ADDRESS, &faulting_phys_addr);
 
@@ -157,24 +156,42 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
     if (!pte)
         return;
 
-    g_vcpus[ctx->host_data->core_index].mtf_target_pte = pte;
-    g_vcpus[ctx->host_data->core_index].mtf_restore_pfn = pte->fields.pfn;
-
     // check if this is a function we have a hook on / want to hide
     UINT64 shadow_pfn = 0;
     if (!get_in_hashmap(g_hook_map, pte->fields.pfn, &shadow_pfn))
         return;
 
+    // check if this process is allowed to see the hook
+    UINT64 allowed_cr3 = 0;
+    if (!get_in_hashmap(g_hook_um_map, pte->fields.pfn, &allowed_cr3))
+        return;
+
     if (qualification.fields.execute_access)
     {
-        pte->fields.pfn = shadow_pfn;
+        UINT64 original_pfn = pte->fields.pfn;
+
+        UINT64 guest_cr3 = 0;
+        __vmx_vmread(GUEST_CR3, &guest_cr3);
+
+        // our process just executed the hooked function, inject the shadow page
+        if ((allowed_cr3 & ~0xFFFull) == (guest_cr3 & ~0xFFFull))
+        {
+            pte->fields.pfn = shadow_pfn;
+        }
+
         pte->fields.execute_access = 1;
+
+        g_vcpus[ctx->host_data->core_index].mtf_target_pte = pte;
+        g_vcpus[ctx->host_data->core_index].mtf_restore_pfn = original_pfn;
 
         // enable MTF so we instantly vmexit on the next instruction
         size_t exec_ctrl = 0;
         __vmx_vmread(CPU_BASED_VM_EXEC_CONTROL, &exec_ctrl);
         exec_ctrl |= CPU_BASED_MONITOR_TRAP_FLAG;
         __vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, exec_ctrl);
+        
+        ctx->invalidate_tlb = true;
+        ctx->advance_rip = false;
     }
 }
 

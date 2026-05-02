@@ -279,6 +279,7 @@ extern "C"
 extern inline int memory_region_cnt = 0;
 extern inline PMEMORY_REGION memory_regions = NULL;
 extern inline PLINEAR_64b_HASH_MAP g_hook_map = NULL; // stores original pfn -> shadow pfn mappings
+extern inline PLINEAR_64b_HASH_MAP g_hook_um_map = NULL; // stores original pfn -> cr3 allowed to "see" the hook
 
 bool mtrr_support();
 void populate_mtrr_regions();
@@ -294,6 +295,6 @@ PEPT_PTE get_ept_pte(UINT32 core, UINT64 guest_physical);
 // will return NULL if the PDE has been split
 PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical);
 
-void install_ept_hook(UINT64 phys_target_address, UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core);
+void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core, UINT64 cr3);
 
 bool free_ept_pages(int core);

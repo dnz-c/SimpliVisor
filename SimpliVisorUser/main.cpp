@@ -2,6 +2,69 @@
 #include <Windows.h>
 #include <intrin.h>
 
+#include "vmx.h"
+
+PVOID g_trampoline = nullptr;
+
+typedef void(__stdcall* target_func_t)();
+
+void target_func_hook()
+{
+    printf("\nHYPERVISOR CAUGHT EXECUTION\n");
+
+    // Call the safe trampoline
+    target_func_t o_target_func = (target_func_t) g_trampoline;
+    return o_target_func();
+}
+
+void broadcast_hook_to_all_cores(UINT64 target_func, UINT64 payload_func, UINT64 tramp_buffer)
+{
+    SYSTEM_INFO sys_info;
+    GetSystemInfo(&sys_info);
+    DWORD num_cores = sys_info.dwNumberOfProcessors;
+
+    std::cout << "detected " << num_cores << " cores" << std::endl;
+
+    HANDLE curr_thread = GetCurrentThread();
+    DWORD_PTR affinity = 0;
+
+    for (DWORD i = 0; i < num_cores; i++)
+    {
+        DWORD_PTR core_mask = (DWORD_PTR) 1 << i;
+
+        DWORD_PTR prev_mask = SetThreadAffinityMask(curr_thread, core_mask);
+        if (i == 0) affinity = prev_mask;
+
+        SwitchToThread();
+
+        asm_vmcall(VMCALL_INSTALLHOOK, target_func, payload_func, tramp_buffer, 0);
+
+        std::cout << "hook installed on core: " << i << std::endl;
+    }
+
+    if (affinity)
+    {
+        SetThreadAffinityMask(curr_thread, affinity);
+        SwitchToThread();
+    }
+
+    std::cout << "sent hook to all cores (hopefully)" << std::endl;
+}
+
+#pragma optimize("", off)
+__declspec(noinline) void target_func()
+{
+    volatile int x = 0;
+    x += 1;
+    x += 2;
+    x += 3;
+    x += 4;
+    x += 5;
+    x += 6;
+    x += 7;
+}
+#pragma optimize("", on)
+
 int main()
 {
     char vendor[13];
@@ -35,7 +98,7 @@ int main()
 
     if (device == INVALID_HANDLE_VALUE)
     {
-        printf_s("> Could not open device: 0x%x\n", GetLastError());
+        printf_s("Could not open device: 0x%x\n", GetLastError());
         //return 1;
     }
 
@@ -43,6 +106,30 @@ int main()
 
     __cpuid(reg, 0x40000001);
     std::cout << std::hex << "reg[0]: " << reg[0] << "\nreg[1]: " << reg[1] << "\nreg[2]: " << reg[2] << "\nreg[3]: " << reg[3] << std::endl;
+
+    g_trampoline = VirtualAlloc(NULL, 1024, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!g_trampoline) return 1;
+
+    VirtualLock(g_trampoline, 1024);
+    RtlSecureZeroMemory(g_trampoline, 1024);
+
+    *(volatile BYTE*) g_trampoline = 0x90;
+
+    std::cout << "trampoline @ 0x" << std::hex << (UINT64) g_trampoline << std::dec << std::endl;
+    std::cout << "hook func @ 0x" << std::hex << (UINT64) target_func_hook << std::dec << std::endl;
+
+    system("pause");
+
+    broadcast_hook_to_all_cores((UINT64)target_func, (UINT64)&target_func_hook, (UINT64) g_trampoline);
+
+    std::cout << "hook installed on all cores!!!!!\n" << std::endl;
+
+    for (int i = 1; i <= 3; i++)
+    {
+        std::cout << "calling target_func... (" << i << "/3)" << std::endl;
+
+        target_func();
+    }
 
     system("pause");
 

@@ -2,6 +2,7 @@
 #include "driver.h"
 #include "vmx.h"
 #include "hde.h"
+#include "memory.h"
 
 bool mtrr_support()
 {
@@ -110,6 +111,7 @@ UINT8 get_fixed_mtrr_type(UINT64 physical_address)
 void init_all_core_eptp()
 {
 	g_hook_map = init_hash_map(PTES_TO_ALLOCATE);
+	g_hook_um_map = init_hash_map(PTES_TO_ALLOCATE);
 	run_on_all_cores(setup_core_eptp);
 }
 
@@ -356,7 +358,7 @@ PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical)
 	return &g_vcpus[core].pdes[pd_idx];
 }
 
-void write_absolute_jmp(UINT64 write_location, UINT64 destination_address)
+void write_absolute_jmp(UINT64 write_location, UINT64 destination_address, UINT64 pml4, UINT32 core)
 {
 	UINT8 jmp_shellcode[] = {
 		0xFF, 0x25, 0x00, 0x00, 0x00, 0x00,
@@ -365,11 +367,12 @@ void write_absolute_jmp(UINT64 write_location, UINT64 destination_address)
 
 	*(UINT64*) (&jmp_shellcode[6]) = destination_address;
 
-	memcpy((PVOID) write_location, jmp_shellcode, sizeof(jmp_shellcode));
+	write_virt(write_location, pml4, (UINT64) jmp_shellcode, sizeof(jmp_shellcode), core);
 }
 
-void install_ept_hook(UINT64 phys_target_address, UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core)
+void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core, UINT64 cr3)
 {
+	UINT64 phys_target_address = virt_to_phys(virt_target_address, cr3, core);
 	int pd_idx = phys_target_address / PDE_PAGE_SIZE;
 	int pt_idx = (phys_target_address % PDE_PAGE_SIZE) / PAGE_SIZE;
 
@@ -389,7 +392,11 @@ void install_ept_hook(UINT64 phys_target_address, UINT64 virt_target_address, UI
 	}
 
 	UINT64 page_aligned_target = virt_target_address & ~0xFFFull;
-	memcpy((PVOID) shadow_page, (PVOID) page_aligned_target, PAGE_SIZE);
+	if (!read_virt(page_aligned_target, cr3, shadow_page, PAGE_SIZE, core))
+	{
+		DbgPrint("couldnt read the target page, is the memory paged?\n"); // UNSAFE in VMX Root
+		return;
+	}
 
 	UINT64 page_offset = virt_target_address & 0xFFF;
 	UINT64 shadow_func_ptr = (UINT64) (shadow_page + page_offset);
@@ -402,17 +409,30 @@ void install_ept_hook(UINT64 phys_target_address, UINT64 virt_target_address, UI
 		stolen_length += hs.len;
 	}
 
-	memcpy((PVOID)tramp_buffer, (PVOID)shadow_func_ptr, stolen_length);
+	if (!write_virt(tramp_buffer, cr3, shadow_func_ptr, stolen_length, core))
+	{
+		DbgPrint("couldnt write to trampoline, is the buffer paged?\n");
+		return;
+	}
 
 	UINT64 return_address = virt_target_address + stolen_length;
-	write_absolute_jmp(tramp_buffer + stolen_length, return_address); // jump back to function
+	UINT8 jmp_back_stub[] = { 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	*(UINT64*) (&jmp_back_stub[6]) = return_address;
+	if (!write_virt(tramp_buffer + stolen_length, cr3, (UINT64) jmp_back_stub, sizeof(jmp_back_stub), core))
+	{
+		DbgPrint("couldn't write jump back to the trampoline buffer!\n");
+		return;
+	}
 
-	write_absolute_jmp(shadow_func_ptr, destination);
+	UINT8 hook_jmp_stub[] = { 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	*(UINT64*) (&hook_jmp_stub[6]) = destination;
+	memcpy((PVOID) shadow_func_ptr, hook_jmp_stub, sizeof(hook_jmp_stub));
 
 	UINT64 offset = shadow_page - g_vcpus[core].ept_pte_buffer.start_virt_address;
 	UINT64 shadow_page_phys = g_vcpus[core].ept_pte_buffer.start_phys_address + offset;
 
 	insert_in_hashmap(g_hook_map, pte->fields.pfn, shadow_page_phys / PAGE_SIZE);
+	insert_in_hashmap(g_hook_um_map, pte->fields.pfn, cr3);
 
 	pte->fields.execute_access = 0; // arm the hook
 }

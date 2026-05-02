@@ -19,4 +19,14 @@
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="vmx.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="asm_vmx.asm">
+      <Filter>Quelldateien</Filter>
+    </MASM>
+  </ItemGroup>
 </Project>

@@ -41,6 +41,7 @@ bool setup_hv_phys_window(int core)
 	}
 	RtlSecureZeroMemory((PVOID) g_vcpus[core].phys_window, PAGE_SIZE);
 
+	// get the pfn, multiply by 8 bytes and mask off the bottom bits
 	UINT64 offset = ((g_vcpus[core].phys_window >> 12) << 3) & 0x7FFFFFFFF8ULL;
 
 	g_vcpus[core].phys_pte = (PPTE) (mm_pte_base + offset);
