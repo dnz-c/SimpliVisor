@@ -28,7 +28,7 @@ bool vmexit_handler(PGUEST_REGS regs)
 
     if (ctx.invalidate_tlb)
     {
-        INVEPT_DESCRIPTOR desc = { 0 };
+        __declspec(align(16)) INVEPT_DESCRIPTOR desc = { 0 };
         desc.eptp = g_vcpus[ctx.host_data->core_index].eptp.all;
         asm_invept(1, &desc);
     }

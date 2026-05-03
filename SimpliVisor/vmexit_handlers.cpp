@@ -96,6 +96,7 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
 
         UINT64 cr3;
         __vmx_vmread(GUEST_CR3, &cr3);
+        cr3 &= ~0xFFFull;
 
         install_ept_hook(virt_target, destination, tramp_buffer, ctx->host_data->core_index, cr3);
 
@@ -230,6 +231,7 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
 
         UINT64 guest_cr3 = 0;
         __vmx_vmread(GUEST_CR3, &guest_cr3);
+        guest_cr3 &= ~0xFFFull;
 
         // our process just executed the hooked function, inject the shadow page
         if ((allowed_cr3 & ~0xFFFull) == (guest_cr3 & ~0xFFFull))

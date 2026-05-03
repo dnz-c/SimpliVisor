@@ -380,6 +380,11 @@ void write_absolute_jmp(UINT64 write_location, UINT64 destination_address, UINT6
 void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core, UINT64 cr3)
 {
 	UINT64 phys_target_address = virt_to_phys(virt_target_address, cr3, core);
+	if (phys_target_address == 0) 
+	{
+		DbgPrint("virt_to_phys failed for address %llx\n", virt_target_address);
+		return;
+	}
 	int pd_idx = phys_target_address / PDE_PAGE_SIZE;
 	int pt_idx = (phys_target_address % PDE_PAGE_SIZE) / PAGE_SIZE;
 
@@ -387,6 +392,11 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 	if (!pte)
 	{
 		PEPT_PTE pt = split_pde(core, pd_idx);
+		if (!pt) 
+		{
+			DbgPrint("FATAL: split_pde returned NULL for pd_idx %d\n", pd_idx);
+			return;
+		}
 		pte = &pt[pt_idx];
 	}
 

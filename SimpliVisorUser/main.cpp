@@ -2,9 +2,12 @@
 #include <Windows.h>
 #include <intrin.h>
 
+#define PAGE_SIZE 0x1000
+
 #include "vmx.h"
 
-PVOID g_trampoline = nullptr;
+PVOID g_trampoline = nullptr; 
+PVOID g_target_func_memory = nullptr; // New isolated memory
 
 typedef void(__stdcall* target_func_t)();
 
@@ -12,7 +15,6 @@ void target_func_hook()
 {
     printf("\nHYPERVISOR CAUGHT EXECUTION\n");
 
-    // Call the safe trampoline
     target_func_t o_target_func = (target_func_t) g_trampoline;
     return o_target_func();
 }
@@ -107,33 +109,38 @@ int main()
     __cpuid(reg, 0x40000001);
     std::cout << std::hex << "reg[0]: " << reg[0] << "\nreg[1]: " << reg[1] << "\nreg[2]: " << reg[2] << "\nreg[3]: " << reg[3] << std::endl;
 
-    g_trampoline = VirtualAlloc(NULL, 1024, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    g_target_func_memory = VirtualAlloc(NULL, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!g_target_func_memory) return 1;
+    VirtualLock(g_target_func_memory, PAGE_SIZE);
+
+    // mov eax, 1337h
+    // ret
+    BYTE dummy_function[] = { 0xB8, 0x37, 0x13, 0x00, 0x00, 0xC3 };
+    memcpy(g_target_func_memory, dummy_function, sizeof(dummy_function));
+
+    g_trampoline = VirtualAlloc(NULL, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     if (!g_trampoline) return 1;
+    VirtualLock(g_trampoline, PAGE_SIZE);
+    RtlSecureZeroMemory(g_trampoline, PAGE_SIZE);
 
-    VirtualLock(g_trampoline, 1024);
-    RtlSecureZeroMemory(g_trampoline, 1024);
-
-    *(volatile BYTE*) g_trampoline = 0x90;
-
-    std::cout << "trampoline @ 0x" << std::hex << (UINT64) g_trampoline << std::dec << std::endl;
-    std::cout << "hook func @ 0x" << std::hex << (UINT64) target_func_hook << std::dec << std::endl;
+    std::cout << "Isolated Target  @ 0x" << std::hex << (UINT64) g_target_func_memory << std::endl;
+    std::cout << "Trampoline       @ 0x" << std::hex << (UINT64) g_trampoline << std::endl;
+    std::cout << "Hook Payload     @ 0x" << std::hex << (UINT64) target_func_hook << std::dec << std::endl;
 
     system("pause");
-    
-    broadcast_hook_to_all_cores((UINT64)target_func, (UINT64)&target_func_hook, (UINT64) g_trampoline);
-    
-    std::cout << "hook installed on all cores!!!!!\n" << std::endl;
-    
+
+    broadcast_hook_to_all_cores((UINT64) g_target_func_memory, (UINT64) &target_func_hook, (UINT64) g_trampoline);
+
+    std::cout << "Hook installed on all cores! Testing execution..." << std::endl;
+
+    target_func_t isolated_func = (target_func_t) g_target_func_memory;
     for (int i = 1; i <= 3; i++)
     {
-        std::cout << "calling target_func... (" << i << "/3)" << std::endl;
-    
-        target_func();
+        std::cout << "calling isolated target_func... (" << i << "/3)" << std::endl;
+        isolated_func();
     }
 
     system("pause");
-
     CloseHandle(device);
-
     return 0;
 }

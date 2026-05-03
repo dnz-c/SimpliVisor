@@ -2,7 +2,7 @@
 #include <ntddk.h>
 #include <intrin.h>
 
-UINT64 get_selfref_index();
+PVOID get_pte_for_va(UINT64 va);
 bool setup_hv_phys_window(int core); // setup a pte we can use in vmx root mode to read physical memory
 bool free_hv_phys_window(int core);
 

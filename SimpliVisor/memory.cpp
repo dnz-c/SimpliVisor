@@ -1,39 +1,47 @@
 #include "memory.h"
 #include "driver.h"
 
-UINT64 get_selfref_index()
+PVOID get_pte_for_va(UINT64 va)
 {
-	PHYSICAL_ADDRESS pml4_phys;
-	pml4_phys.QuadPart = __readcr3() & ~0xFFF;
+	PHYSICAL_ADDRESS pml4_pa;
+	pml4_pa.QuadPart = __readcr3() & ~0xFFF;
 
-	UINT64 pml4_virt = (UINT64)MmGetVirtualForPhysical(pml4_phys);
-	if (!pml4_virt) return 0;
+	UINT64* pml4 = (UINT64*) MmGetVirtualForPhysical(pml4_pa);
+	if (!pml4) return NULL;
+	int pml4_idx = (va >> 39) & 0x1FF;
+	if ((pml4[pml4_idx] & 1) == 0) return NULL; // present
 
-	DbgPrint("kernel pml4 mapped to: %p\n", (PVOID)pml4_virt);
+	PHYSICAL_ADDRESS pdpt_pa;
+	pdpt_pa.QuadPart = pml4[pml4_idx] & 0xFFFFFFFFFF000;
+	UINT64* pdpt = (UINT64*) MmGetVirtualForPhysical(pdpt_pa);
+	if (!pdpt) return NULL;
+	int pdpt_idx = (va >> 30) & 0x1FF;
+	if ((pdpt[pdpt_idx] & 1) == 0) return NULL; // present
+	if (pdpt[pdpt_idx] & (1 << 7)) return NULL; // large page
 
-	for (size_t i = 0; i < 512; i++)
-	{
-		PML4E pml4e;
-		memcpy(&pml4e, (PVOID) (pml4_virt + (i * sizeof(PML4E))), sizeof(PML4E));
+	PHYSICAL_ADDRESS pd_pa;
+	pd_pa.QuadPart = pdpt[pdpt_idx] & 0xFFFFFFFFFF000;
+	UINT64* pd = (UINT64*) MmGetVirtualForPhysical(pd_pa);
+	if (!pd) return NULL;
+	int pd_idx = (va >> 21) & 0x1FF;
+	if ((pd[pd_idx] & 1) == 0) return NULL; // present
+	if (pd[pd_idx] & (1 << 7)) return NULL; // large page
 
-		if (pml4e.PageFrameNumber == pml4_phys.QuadPart / PAGE_SIZE) return i;
-	}
+	PHYSICAL_ADDRESS pt_pa;
+	pt_pa.QuadPart = pd[pd_idx] & 0xFFFFFFFFFF000;
+	UINT64* pt = (UINT64*) MmGetVirtualForPhysical(pt_pa);
+	if (!pt) return NULL;
+	int pt_idx = (va >> 12) & 0x1FF;
 
-	return 0;
+	return (PPTE) &pt[pt_idx];
 }
 
 bool setup_hv_phys_window(int core)
 {
-	UINT64 selfref = get_selfref_index();
-	if (selfref == 0)
-	{
-		DbgPrint("failed to get selfref idx\n");
-		return false;
-	}
+	PHYSICAL_ADDRESS max_phys = { 0 };
+	max_phys.QuadPart = MAXULONG64;
 
-	UINT64 mm_pte_base = 0xFFFF000000000000ULL | (selfref << 39);
-
-	g_vcpus[core].phys_window = (UINT64)ExAllocatePoolWithTag(NonPagedPool, PAGE_SIZE, 'pswd');
+	g_vcpus[core].phys_window = (UINT64) MmAllocateContiguousMemory(PAGE_SIZE, max_phys);
 	if (!g_vcpus[core].phys_window)
 	{
 		DbgPrint("failed to alloc pool\n");
@@ -44,10 +52,12 @@ bool setup_hv_phys_window(int core)
 	// get the pfn, multiply by 8 bytes and mask off the bottom bits
 	UINT64 offset = ((g_vcpus[core].phys_window >> 12) << 3) & 0x7FFFFFFFF8ULL;
 
-	g_vcpus[core].phys_pte = (PPTE) (mm_pte_base + offset);
+	g_vcpus[core].phys_pte = (PPTE)get_pte_for_va(g_vcpus[core].phys_window);
+
 	if (!g_vcpus[core].phys_pte)
 	{
-		DbgPrint("failed to calc pte\n");
+		DbgPrint("failed to locate PTE for phys_window\n");
+		MmFreeContiguousMemory((PVOID)g_vcpus[core].phys_window);
 		return false;
 	}
 	
@@ -61,7 +71,7 @@ bool free_hv_phys_window(int core)
 {
 	g_vcpus[core].phys_pte->PageFrameNumber = g_vcpus[core].orig_window_pfn;
 	__invlpg((PVOID) g_vcpus[core].phys_window);
-	ExFreePool((PVOID)g_vcpus[core].phys_window);
+	MmFreeContiguousMemory((PVOID)g_vcpus[core].phys_window);
 	return true;
 }
 
@@ -93,41 +103,29 @@ UINT64 virt_to_phys(UINT64 virt, UINT64 pml4, int core)
 {
 	unsigned short PML4 = (unsigned short) ((virt >> 39) & 0x1FF);
 	UINT64 PML4E = 0;
-	read_physical((pml4 + PML4 * sizeof(UINT64)), (UINT64) & PML4E, sizeof(PML4E), core);
+	read_physical((pml4 + PML4 * sizeof(UINT64)), (UINT64) &PML4E, sizeof(PML4E), core);
 
-	if (PML4E == 0)
-		return 0;
+	if ((PML4E & 1) == 0) return 0;
 
 	unsigned short DirectoryPtr = (unsigned short) ((virt >> 30) & 0x1FF);
 	UINT64 PDPTE = 0;
 	read_physical(((PML4E & 0xFFFFFFFFFF000) + DirectoryPtr * sizeof(UINT64)), (UINT64) &PDPTE, sizeof(PDPTE), core);
 
-	if (PDPTE == 0)
-		return 0;
-
-	if ((PDPTE & (1 << 7)) != 0)
-		return (PDPTE & 0xFFFFFC0000000) + (virt & 0x3FFFFFFF);
+	if ((PDPTE & 1) == 0) return 0;
+	if ((PDPTE & (1 << 7)) != 0) return (PDPTE & 0x000FFFFFC0000000) + (virt & 0x3FFFFFFF);
 
 	unsigned short Directory = (unsigned short) ((virt >> 21) & 0x1FF);
-
 	UINT64 PDE = 0;
 	read_physical(((PDPTE & 0xFFFFFFFFFF000) + Directory * sizeof(UINT64)), (UINT64) &PDE, sizeof(PDE), core);
 
-	if (PDE == 0)
-		return 0;
-
-	if ((PDE & (1 << 7)) != 0)
-	{
-		return (PDE & 0xFFFFFFFE00000) + (virt & 0x1FFFFF);
-	}
+	if ((PDE & 1) == 0) return 0;
+	if ((PDE & (1 << 7)) != 0) return (PDE & 0x000FFFFFFFE00000) + (virt & 0x1FFFFF);
 
 	unsigned short Table = (unsigned short) ((virt >> 12) & 0x1FF);
 	UINT64 PTE = 0;
-
 	read_physical(((PDE & 0xFFFFFFFFFF000) + Table * sizeof(UINT64)), (UINT64) &PTE, sizeof(PTE), core);
 
-	if (PTE == 0)
-		return 0;
+	if ((PTE & 1) == 0) return 0;
 
 	return (PTE & 0xFFFFFFFFFF000) + (virt & 0xFFF);
 }

@@ -265,7 +265,7 @@ typedef struct _EPT_PTE_BUFFER
     UINT64 size;
 } EPT_PTE_BUFFER, * PEPT_PTE_BUFFER;
 
-typedef struct _INVEPT_DESCRIPTOR
+__declspec(align(16)) typedef struct _INVEPT_DESCRIPTOR
 {
     UINT64 eptp;
     UINT64 reserved1;
