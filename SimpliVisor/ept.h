@@ -278,14 +278,13 @@ extern "C"
 
 extern inline int memory_region_cnt = 0;
 extern inline PMEMORY_REGION memory_regions = NULL;
-extern inline PLINEAR_64b_HASH_MAP g_hook_map = NULL; // stores original pfn -> shadow pfn mappings
-extern inline PLINEAR_64b_HASH_MAP g_hook_um_map = NULL; // stores original pfn -> cr3 allowed to "see" the hook
 
 bool mtrr_support();
 void populate_mtrr_regions();
 UINT8 get_fixed_mtrr_type(UINT64 physical_address);
 
 void init_all_core_eptp();
+bool setup_core_hashmaps(int core);
 bool setup_core_eptp(int core);
 
 // splits a 2mb large page into 512 4kb pages keeping the same access rights, returns the new PT
@@ -297,4 +296,6 @@ PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical);
 
 void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core, UINT64 cr3);
 
+void free_all_core_eptp();
+bool free_core_hashmaps(int core);
 bool free_ept_pages(int core);

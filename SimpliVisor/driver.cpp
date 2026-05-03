@@ -87,8 +87,9 @@ NTSTATUS mj_close(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 	stackLocation = IoGetCurrentIrpStackLocation(Irp);
 
 	run_on_all_cores(exit_vmx_operation);
-	run_on_all_cores(free_ept_pages);
+	free_all_core_eptp();
 	free_vmx_regions();
+	run_on_all_cores(free_hv_phys_window);
 
 	ExFreePool(g_vcpus);
 

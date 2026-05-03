@@ -110,9 +110,16 @@ UINT8 get_fixed_mtrr_type(UINT64 physical_address)
 
 void init_all_core_eptp()
 {
-	g_hook_map = init_hash_map(PTES_TO_ALLOCATE);
-	g_hook_um_map = init_hash_map(PTES_TO_ALLOCATE);
+	run_on_all_cores(setup_core_hashmaps);
 	run_on_all_cores(setup_core_eptp);
+}
+
+bool setup_core_hashmaps(int core)
+{
+	g_vcpus[core].hook_map = init_hash_map(PTES_TO_ALLOCATE);
+	g_vcpus[core].hook_um_map = init_hash_map(PTES_TO_ALLOCATE);
+
+	return true;
 }
 
 bool setup_core_eptp(int core)
@@ -431,10 +438,24 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 	UINT64 offset = shadow_page - g_vcpus[core].ept_pte_buffer.start_virt_address;
 	UINT64 shadow_page_phys = g_vcpus[core].ept_pte_buffer.start_phys_address + offset;
 
-	insert_in_hashmap(g_hook_map, pte->fields.pfn, shadow_page_phys / PAGE_SIZE);
-	insert_in_hashmap(g_hook_um_map, pte->fields.pfn, cr3);
+	insert_in_hashmap(g_vcpus[core].hook_map, pte->fields.pfn, shadow_page_phys / PAGE_SIZE);
+	insert_in_hashmap(g_vcpus[core].hook_um_map, pte->fields.pfn, cr3);
 
 	pte->fields.execute_access = 0; // arm the hook
+}
+
+void free_all_core_eptp()
+{
+	run_on_all_cores(free_core_hashmaps);
+	run_on_all_cores(free_ept_pages);
+}
+
+bool free_core_hashmaps(int core)
+{
+	ExFreePool(g_vcpus[core].hook_map->buffer);
+	ExFreePool(g_vcpus[core].hook_um_map->buffer);
+
+	return true;
 }
 
 bool free_ept_pages(int core)

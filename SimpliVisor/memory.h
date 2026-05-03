@@ -4,6 +4,7 @@
 
 UINT64 get_selfref_index();
 bool setup_hv_phys_window(int core); // setup a pte we can use in vmx root mode to read physical memory
+bool free_hv_phys_window(int core);
 
 bool read_physical(UINT64 phys, UINT64 buf, size_t cnt, int core);
 bool write_physical(UINT64 phys, UINT64 buf, size_t cnt, int core);

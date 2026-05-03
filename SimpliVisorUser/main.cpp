@@ -119,15 +119,15 @@ int main()
     std::cout << "hook func @ 0x" << std::hex << (UINT64) target_func_hook << std::dec << std::endl;
 
     system("pause");
-
+    
     broadcast_hook_to_all_cores((UINT64)target_func, (UINT64)&target_func_hook, (UINT64) g_trampoline);
-
+    
     std::cout << "hook installed on all cores!!!!!\n" << std::endl;
-
+    
     for (int i = 1; i <= 3; i++)
     {
         std::cout << "calling target_func... (" << i << "/3)" << std::endl;
-
+    
         target_func();
     }
 

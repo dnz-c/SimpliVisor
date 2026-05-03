@@ -51,8 +51,17 @@ bool setup_hv_phys_window(int core)
 		return false;
 	}
 	
+	g_vcpus[core].orig_window_pfn = g_vcpus[core].phys_pte->PageFrameNumber;
 	DbgPrint("PFN: 0x%lx | MmGetPhysical: 0x%lx (these must match!!)\n", g_vcpus[core].phys_pte->PageFrameNumber * PAGE_SIZE, MmGetPhysicalAddress((PVOID) g_vcpus[core].phys_window).QuadPart);
 
+	return true;
+}
+
+bool free_hv_phys_window(int core)
+{
+	g_vcpus[core].phys_pte->PageFrameNumber = g_vcpus[core].orig_window_pfn;
+	__invlpg((PVOID) g_vcpus[core].phys_window);
+	ExFreePool((PVOID)g_vcpus[core].phys_window);
 	return true;
 }
 

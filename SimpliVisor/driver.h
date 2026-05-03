@@ -103,6 +103,10 @@ struct VCPU
 
     PPTE phys_pte;
     UINT64 phys_window;
+	UINT64 orig_window_pfn;
+
+	PLINEAR_64b_HASH_MAP hook_map; // stores original pfn -> shadow pfn mappings
+	PLINEAR_64b_HASH_MAP hook_um_map; // stores original pfn -> cr3 allowed to "see" the hook
 };
 
 extern inline VCPU* g_vcpus = NULL;

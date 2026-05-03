@@ -36,6 +36,11 @@ typedef struct _EXIT_CONTEXT
     BOOLEAN advance_rip;
 } EXIT_CONTEXT, * PEXIT_CONTEXT;
 
+#define TYPE_MOV_TO_CR 0
+#define TYPE_MOV_FROM_CR 1
+#define TYPE_CLTS 2
+#define TYPE_LMSW 3
+
 typedef void (*t_VMEXIT_HANDLER)(PEXIT_CONTEXT);
 extern inline t_VMEXIT_HANDLER g_vmexit_handlers[MAX_VMEXIT_REASON] = { NULL };
 
@@ -43,6 +48,7 @@ void init_vmexit_dispatch_table();
 
 void handle_cpuid(PEXIT_CONTEXT ctx);
 void handle_vmcall(PEXIT_CONTEXT ctx);
+void handle_cr_access(PEXIT_CONTEXT ctx);
 void handle_rdmsr(PEXIT_CONTEXT ctx);
 void handle_wrmsr(PEXIT_CONTEXT ctx);
 void handle_mtf(PEXIT_CONTEXT ctx);

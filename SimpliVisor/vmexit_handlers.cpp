@@ -12,6 +12,7 @@ void init_vmexit_dispatch_table()
 
     g_vmexit_handlers[EXIT_REASON::CPUID] = handle_cpuid;
     g_vmexit_handlers[EXIT_REASON::VMCALL] = handle_vmcall;
+    g_vmexit_handlers[EXIT_REASON::CR_ACCESS] = handle_cr_access;
     g_vmexit_handlers[EXIT_REASON::RDMSR] = handle_rdmsr;
     g_vmexit_handlers[EXIT_REASON::WRMSR] = handle_wrmsr;
     g_vmexit_handlers[EXIT_REASON::MTF] = handle_mtf;
@@ -75,6 +76,10 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
         __vmx_vmread(GUEST_FS_BASE, &guest_fs_base);
         __writemsr(FS_BASE, guest_fs_base);
 
+        size_t guest_cr3;
+        __vmx_vmread(GUEST_CR3, &guest_cr3);
+        __writecr3(guest_cr3);
+
         __vmx_off();
 
         asm_exit_vm(guest_rip, guest_rsp, guest_eflags, guest_cs, guest_ss, ctx->regs);
@@ -97,6 +102,59 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
         ctx->invalidate_tlb = true;
     }
         break;
+    }
+}
+
+void handle_cr_access(PEXIT_CONTEXT ctx)
+{
+    MOV_CR_QUALIFICATION qualification = { 0 };
+    __vmx_vmread(EXIT_QUALIFICATION, &qualification.all);
+
+    PUINT64 reg_ptr = (PUINT64) &ctx->regs->rax - qualification.fields.register_;
+
+    UINT64 guest_rsp;
+    if (qualification.fields.register_ == 4) // RSP
+    {
+        __vmx_vmread(GUEST_RSP, &guest_rsp);
+        *reg_ptr = guest_rsp;
+    }
+
+    switch (qualification.fields.access_type)
+    {
+    case TYPE_MOV_TO_CR:
+    {
+        switch (qualification.fields.control_register)
+        {
+        case 0:
+            __vmx_vmwrite(GUEST_CR0, *reg_ptr);
+            __vmx_vmwrite(CR0_READ_SHADOW, *reg_ptr);
+            break;
+        case 3:
+            __vmx_vmwrite(GUEST_CR3, *reg_ptr);
+            break;
+        case 4:
+            __vmx_vmwrite(GUEST_CR4, *reg_ptr);
+            __vmx_vmwrite(CR4_READ_SHADOW, *reg_ptr);
+            break;
+        }
+    }
+    break;
+    case TYPE_MOV_FROM_CR:
+    {
+        switch (qualification.fields.control_register)
+        {
+        case 0:
+            __vmx_vmread(GUEST_CR0, reg_ptr);
+            break;
+        case 3:
+            __vmx_vmread(GUEST_CR3, reg_ptr);
+            break;
+        case 4:
+            __vmx_vmread(GUEST_CR4, reg_ptr);
+            break;
+        }
+    }
+    break;
     }
 }
 
@@ -158,12 +216,12 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
 
     // check if this is a function we have a hook on / want to hide
     UINT64 shadow_pfn = 0;
-    if (!get_in_hashmap(g_hook_map, pte->fields.pfn, &shadow_pfn))
+    if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_map, pte->fields.pfn, &shadow_pfn))
         return;
 
     // check if this process is allowed to see the hook
     UINT64 allowed_cr3 = 0;
-    if (!get_in_hashmap(g_hook_um_map, pte->fields.pfn, &allowed_cr3))
+    if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_um_map, pte->fields.pfn, &allowed_cr3))
         return;
 
     if (qualification.fields.execute_access)

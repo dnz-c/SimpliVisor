@@ -206,6 +206,7 @@ enum EXIT_REASON
 {
     CPUID = 0xA,
     VMCALL = 0x12,
+    CR_ACCESS = 0x1C,
     RDMSR = 0x1F,
     WRMSR = 0x20,
     MTF = 0x25,
@@ -228,4 +229,20 @@ typedef union _EPT_VIOLATION_QUALIFICATION
         ULONG64 advanced_vmexit : 1; // 8: If GLA valid, advanced VM-exit info
         ULONG64 reserved2 : 55;
     } fields;
-} EPT_VIOLATION_QUALIFICATION;
+} EPT_VIOLATION_QUALIFICATION, * PEPT_VIOLATION_QUALIFICATION;
+
+typedef union _MOV_CR_QUALIFICATION
+{
+    ULONG_PTR all;
+    struct
+    {
+        ULONG control_register : 4;
+        ULONG access_type : 2;
+        ULONG lmsw_operand_type : 1;
+        ULONG reserved1 : 1;
+        ULONG register_ : 4;
+        ULONG reserved2 : 4;
+        ULONG lmsw_source_data : 16;
+        ULONG reserved3;
+    } fields;
+} MOV_CR_QUALIFICATION, * PMOV_CR_QUALIFICATION;
