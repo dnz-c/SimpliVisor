@@ -1,4 +1,4 @@
-# SimpliVisor
+# SimpliVisor (W.I.P)
 
 ![Logo](logo.png)
 
