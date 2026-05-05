@@ -1,10 +1,8 @@
-
 # SimpliVisor
 
-A simple implementation of a thin type 2 hypervisor running on intel-vtx
-
-
 ![Logo](logo.png)
+
+A simple implementation of a thin type 2 hypervisor running on intel-vtx
 
 
 ## Features
