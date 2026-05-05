@@ -126,6 +126,8 @@ int main()
 
 - Add interrupt handling
 
+- Add better process filtering using the CR access vmexit and a EPTP copy containing all hooks
+
 
 
 ## Authors
