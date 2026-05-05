@@ -4,7 +4,7 @@
 A simple implementation of a thin type 2 hypervisor running on intel-vtx
 
 
-![Logo](logo.png =256x256)
+![Logo](logo.png|256)
 
 
 ## Features
