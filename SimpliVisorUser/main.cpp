@@ -53,20 +53,6 @@ void broadcast_hook_to_all_cores(UINT64 target_func, UINT64 payload_func, UINT64
     std::cout << "sent hook to all cores (hopefully)" << std::endl;
 }
 
-#pragma optimize("", off)
-__declspec(noinline) void target_func()
-{
-    volatile int x = 0;
-    x += 1;
-    x += 2;
-    x += 3;
-    x += 4;
-    x += 5;
-    x += 6;
-    x += 7;
-}
-#pragma optimize("", on)
-
 int main()
 {
     char vendor[13];

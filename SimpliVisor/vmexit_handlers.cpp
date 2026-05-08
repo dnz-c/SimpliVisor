@@ -56,7 +56,7 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
 {
     switch (ctx->regs->rcx)
     {
-    case VMCALL_EXITVM:
+    case VMCALL_REASON::EXIT_VM:
     {
         DbgPrint("VMEXIT on core: %d\n", ctx->host_data->core_index);
 
@@ -88,7 +88,7 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
         DbgBreakPoint();
     }
         break;
-    case VMCALL_INSTALLHOOK:
+    case VMCALL_REASON::INSTALL_HOOK:
     {
         UINT64 virt_target = ctx->regs->rdx;
         UINT64 destination = ctx->regs->r8;
@@ -215,18 +215,18 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
     if (!pte)
         return;
 
-    // check if this is a function we have a hook on / want to hide
-    UINT64 shadow_pfn = 0;
-    if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_map, pte->fields.pfn, &shadow_pfn))
-        return;
-
-    // check if this process is allowed to see the hook
-    UINT64 allowed_cr3 = 0;
-    if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_um_map, pte->fields.pfn, &allowed_cr3))
-        return;
-
     if (qualification.fields.execute_access)
     {
+        // check if this is a function we have a hook on / want to hide
+        UINT64 shadow_pfn = 0;
+        if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_map, pte->fields.pfn, &shadow_pfn))
+            return;
+
+        // check if this process is allowed to see the hook
+        UINT64 allowed_cr3 = 0;
+        if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_um_map, pte->fields.pfn, &allowed_cr3))
+            return;
+
         UINT64 original_pfn = pte->fields.pfn;
 
         UINT64 guest_cr3 = 0;
@@ -252,6 +252,15 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
         
         ctx->invalidate_tlb = true;
         ctx->advance_rip = false;
+    }
+    else if (qualification.fields.write_access)
+    {
+        // check if they wanted to write to our zero page
+        if (pte->fields.pfn == pfn_zero_page)
+        {
+            // do nothing, advance the rip and just let the write go nowhere
+            return;
+        }
     }
 }
 

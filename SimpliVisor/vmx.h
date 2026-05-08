@@ -6,9 +6,6 @@
 
 #include "vmexit_handlers.h"
 
-#define VMCALL_EXITVM 0x1337
-#define VMCALL_INSTALLHOOK 0x1338
-
 // MSRs
 #define IA32_FEATURE_CONTROL            0x3A
 #define IA32_SYSENTER_CS                0x174
@@ -122,6 +119,12 @@ enum SEGREGS
     GS,
     LDTR,
     TR
+};
+
+enum VMCALL_REASON
+{
+    EXIT_VM = 0x1337,
+    INSTALL_HOOK = 0x1338,
 };
 
 extern "C" 

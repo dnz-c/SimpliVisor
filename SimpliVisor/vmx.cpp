@@ -200,7 +200,7 @@ bool enter_vmx_operation(int core, ULONG64 rsp)
 
 bool exit_vmx_operation(int core)
 {
-	asm_vmcall(VMCALL_EXITVM, 0, 0, 0, 0);
+	asm_vmcall(VMCALL_REASON::EXIT_VM, 0, 0, 0, 0);
 	DbgPrint("__vmx_off succeded on core: %ull\n", core);
 
 	UINT64 cr4 = __readcr4();

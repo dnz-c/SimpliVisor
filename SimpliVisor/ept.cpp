@@ -110,6 +110,15 @@ UINT8 get_fixed_mtrr_type(UINT64 physical_address)
 
 void init_all_core_eptp()
 {
+
+	PHYSICAL_ADDRESS max_phys = { 0 };
+	max_phys.QuadPart = MAXULONG64;
+
+	v_zero_page = (UINT64) MmAllocateContiguousMemory(PAGE_SIZE, max_phys);
+	RtlSecureZeroMemory((PVOID) v_zero_page, PAGE_SIZE);
+
+	pfn_zero_page = MmGetPhysicalAddress((PVOID)v_zero_page).QuadPart / PAGE_SIZE;
+
 	run_on_all_cores(setup_core_hashmaps);
 	run_on_all_cores(setup_core_eptp);
 }
@@ -454,8 +463,37 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 	pte->fields.execute_access = 0; // arm the hook
 }
 
+void hide_page_range(UINT64 virt_address, UINT32 pages, UINT32 core, UINT64 cr3)
+{
+	for (size_t i = 0; i < pages; i++)
+	{
+		UINT64 aligned_virt = (UINT64) PAGE_ALIGN(virt_address + (i * PAGE_SIZE));
+		UINT64 phys_address = virt_to_phys(aligned_virt, cr3, core);
+
+		int pd_idx = phys_address / PDE_PAGE_SIZE;
+		int pt_idx = (phys_address % PDE_PAGE_SIZE) / PAGE_SIZE;
+		PEPT_PTE pte = get_ept_pte(core, phys_address);
+		if (!pte)
+		{
+			PEPT_PTE pt = split_pde(core, pd_idx);
+			if (!pt)
+			{
+				DbgPrint("FATAL: split_pde returned NULL for pd_idx %d\n", pd_idx);
+				return;
+			}
+			pte = &pt[pt_idx];
+		}
+
+		pte->fields.pfn = pfn_zero_page;
+		pte->fields.write_access = 0; // trap writes and void them
+		pte->fields.execute_access = 0;
+	}
+}
+
 void free_all_core_eptp()
 {
+	MmFreeContiguousMemory((PVOID)v_zero_page);
+
 	run_on_all_cores(free_core_hashmaps);
 	run_on_all_cores(free_ept_pages);
 }
