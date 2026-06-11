@@ -1,4 +1,4 @@
-# SimpliVisor (W.I.P)
+# SimpliVisor
 
 ![Logo](logo.png)
 
@@ -12,6 +12,36 @@ A simple implementation of a thin type 2 hypervisor running on intel-vtx
 - Stealth EPT Hooks using shadow pages and MTF stepping
 - Hook functions from usermode
 
+## Architecture
+### Virtualizing the system:
+- Capture all GPRs
+- allocate a new host stack
+- Capture the segment descriptors
+- Setup EPT
+- Configure the VMCS using captured data
+
+### EPT
+- Identity mapping with 2mb pages to reduce TLB pressure
+	- Guest physical -> Host physical
+- Dynamic page splitting from 2mb pages to 4kb pages for granular access control
+- Per processor EPT for stealth hooks
+
+### Why per processor EPT
+Since the hook replaces the PFN of the target PTE if another core is scanning the function at the exact time the hook is triggered the jump will be visible and the hook compromised.
+
+By using a per processor EPT the other core executing the scanning function will see the untouched original page instead of the shadow one even when the hook is currently executed on another core
+
+## EPT stealth hooking
+### Initialization
+- Grab pre allocated trampoline buffer and write hooking stub in the buffer
+- Grab pre allocated a shadow page and write a jmp to the trampoline stub in the buffer
+- Split the target page to 4kb granularity and adjust access controls to exclude execute
+
+### Runtime
+- When the target function is executed a ept violation will occur
+- VM exit handler will catch the violation and swap the PFN of the target PTE to the shadow PFN containing the trampoline jump
+- VM exit handler will enable the MTF to exit as soon as the instruction was executed
+- Once the VM exit handler resumes and traps again after the jump was executed disable the MTF and restore the original page
 
 ## Usage/Examples
 
@@ -115,6 +145,14 @@ int main()
 }
 ```
 
+## Limitations
+- The EPT hooking mechanism can be compromised if a interrupt occurs precisely between the phase when the PFN has been overwritten, the guest resumed but the instruction has not yet been executed. If an interrupt occurs then, the shadow page will be visible to the routine handling the interrupt on the processor that was about to execute the hook.
+- Currently there is a race condition when placing EPT hooks from a usermode process which causes the system to freeze on EPT hook initialization
+	- Likely cause is that all processors allocate a shadow page and create their own trampoline hook an implementation where only the first core creates the shadow page and trampoline buffer and all following processors copy this configuration will likely solve the issue
+
+## Build requirements
+- Windows Visual Studio 2022
+- Latest WDK version
 
 ## Roadmap
 
@@ -138,5 +176,3 @@ int main()
 ## Credits
 
 [Hypervisor from Scratch](https://github.com/SinaKarvandi/Hypervisor-From-Scratch) by Sina Karvandi for his great writeup on how Hypervisors work and his segment selector logic
-
-[Gemini](https://gemini.google.com) for debugging support and IA32 architecture specifics
