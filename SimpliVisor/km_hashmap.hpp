@@ -25,25 +25,32 @@ typedef enum
     SLOT_REMOVED
 } SLOT_STATE;
 
+typedef struct _EPT_HOOK
+{
+    UINT64 cr3;
+    UINT64 shadow_pfn;
+} EPT_HOOK, * PEPT_HOOK;
+
 typedef struct _HASH_ENTRY
 {
     UINT64 key;
-    UINT64 value;
+    EPT_HOOK value;
     SLOT_STATE state;
 } HASH_ENTRY;
 
-typedef struct _LINEAR_64b_HASH_MAP
+typedef struct _LINEAR_128b_HASH_MAP
 {
     UINT32 entry_cap;
     UINT32 count;
     HASH_ENTRY* buffer;
     HV_SPINLOCK lock;
-} LINEAR_64b_HASH_MAP, * PLINEAR_64b_HASH_MAP;
+} LINEAR_128b_HASH_MAP, * PLINEAR_128b_HASH_MAP;
 
-__forceinline PLINEAR_64b_HASH_MAP init_hash_map(UINT32 entries)
+static PLINEAR_128b_HASH_MAP init_hash_map(UINT32 entries)
 {
-    PLINEAR_64b_HASH_MAP map = (PLINEAR_64b_HASH_MAP) ExAllocatePool(NonPagedPool, sizeof(LINEAR_64b_HASH_MAP));
+    PLINEAR_128b_HASH_MAP map = (PLINEAR_128b_HASH_MAP) ExAllocatePool(NonPagedPool, sizeof(LINEAR_128b_HASH_MAP));
     if (!map) return NULL;
+    RtlSecureZeroMemory(map, sizeof(LINEAR_128b_HASH_MAP));
 
     map->entry_cap = entries;
     map->count = 0;
@@ -60,7 +67,7 @@ __forceinline PLINEAR_64b_HASH_MAP init_hash_map(UINT32 entries)
     return map;
 }
 
-__forceinline bool insert_in_hashmap(PLINEAR_64b_HASH_MAP map, UINT64 key, UINT64 value)
+static bool insert_in_hashmap(PLINEAR_128b_HASH_MAP map, UINT64 key, EPT_HOOK value)
 {
     if (map->count >= map->entry_cap) return FALSE;
 
@@ -87,7 +94,7 @@ __forceinline bool insert_in_hashmap(PLINEAR_64b_HASH_MAP map, UINT64 key, UINT6
     return FALSE;
 }
 
-__forceinline bool get_in_hashmap(PLINEAR_64b_HASH_MAP map, UINT64 key, UINT64* out_value)
+static bool get_in_hashmap(PLINEAR_128b_HASH_MAP map, UINT64 key, PEPT_HOOK out_value)
 {
     UINT32 index = key % map->entry_cap;
 
@@ -107,7 +114,7 @@ __forceinline bool get_in_hashmap(PLINEAR_64b_HASH_MAP map, UINT64 key, UINT64* 
     return FALSE;
 }
 
-__forceinline bool remove_from_hashmap(PLINEAR_64b_HASH_MAP map, UINT64 key)
+static bool remove_from_hashmap(PLINEAR_128b_HASH_MAP map, UINT64 key)
 {
     UINT32 index = key % map->entry_cap;
 
@@ -131,7 +138,7 @@ __forceinline bool remove_from_hashmap(PLINEAR_64b_HASH_MAP map, UINT64 key)
     return FALSE;
 }
 
-__forceinline void free_hash_map(PLINEAR_64b_HASH_MAP map)
+static void free_hash_map(PLINEAR_128b_HASH_MAP map)
 {
     if (map)
     {

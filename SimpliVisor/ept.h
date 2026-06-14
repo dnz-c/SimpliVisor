@@ -276,6 +276,9 @@ extern "C"
     void asm_invept(UINT32 type, PINVEPT_DESCRIPTOR descriptor);
 }
 
+struct _HOST_PROCESSOR_DATA;
+typedef struct _HOST_PROCESSOR_DATA* PHOST_PROCESSOR_DATA;
+
 extern inline UINT64 v_zero_page = 0; // dont use this, this is the VA stored for later freeing
 extern inline UINT64 pfn_zero_page = 0; // PFN pointing to a zeroed out physical page
 extern inline int memory_region_cnt = 0;
@@ -296,7 +299,7 @@ PEPT_PTE get_ept_pte(UINT32 core, UINT64 guest_physical);
 // will return NULL if the PDE has been split
 PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical);
 
-void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core, UINT64 cr3);
+void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, PHOST_PROCESSOR_DATA processor_data, UINT64 cr3);
 void hide_page_range(UINT64 virt_address, UINT32 pages, UINT32 core, UINT64 cr3); // redirects read to said virt_address to an empty page
 
 void free_all_core_eptp();

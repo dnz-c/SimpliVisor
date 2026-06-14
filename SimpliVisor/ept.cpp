@@ -126,7 +126,6 @@ void init_all_core_eptp()
 bool setup_core_hashmaps(int core)
 {
 	g_vcpus[core].hook_map = init_hash_map(PTES_TO_ALLOCATE);
-	g_vcpus[core].hook_um_map = init_hash_map(PTES_TO_ALLOCATE);
 
 	return true;
 }
@@ -386,9 +385,9 @@ void write_absolute_jmp(UINT64 write_location, UINT64 destination_address, UINT6
 	write_virt(write_location, pml4, (UINT64) jmp_shellcode, sizeof(jmp_shellcode), core);
 }
 
-void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, UINT32 core, UINT64 cr3)
+void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, PHOST_PROCESSOR_DATA processor_data, UINT64 cr3)
 {
-	UINT64 phys_target_address = virt_to_phys(virt_target_address, cr3, core);
+	UINT64 phys_target_address = virt_to_phys(virt_target_address, cr3, processor_data->core_index);
 	if (phys_target_address == 0) 
 	{
 		DbgPrint("virt_to_phys failed for address %llx\n", virt_target_address);
@@ -397,10 +396,10 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 	int pd_idx = phys_target_address / PDE_PAGE_SIZE;
 	int pt_idx = (phys_target_address % PDE_PAGE_SIZE) / PAGE_SIZE;
 
-	PEPT_PTE pte = get_ept_pte(core, phys_target_address);
+	PEPT_PTE pte = get_ept_pte(processor_data->core_index, phys_target_address);
 	if (!pte)
 	{
-		PEPT_PTE pt = split_pde(core, pd_idx);
+		PEPT_PTE pt = split_pde(processor_data->core_index, pd_idx);
 		if (!pt) 
 		{
 			DbgPrint("FATAL: split_pde returned NULL for pd_idx %d\n", pd_idx);
@@ -409,16 +408,29 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 		pte = &pt[pt_idx];
 	}
 
+	// check if we already placed a hook for this function on another core
+	for (size_t c_idx = 0; c_idx < processor_data->core_count; c_idx++)
+	{
+		EPT_HOOK hook;
+		if (get_in_hashmap(g_vcpus[c_idx].hook_map, pte->fields.pfn, &hook))
+		{
+			insert_in_hashmap(g_vcpus[processor_data->core_index].hook_map, pte->fields.pfn, hook);
+			pte->fields.execute_access = 0; // arm the hook
+
+			return;
+		}
+	}
+
 	// build the "shadow" page
-	UINT64 shadow_page = (UINT64) InterlockedExchangeAdd64((LONG64*) &g_vcpus[core].ept_pte_buffer.curr_virt_address, PAGE_SIZE);
-	if (shadow_page >= g_vcpus[core].ept_pte_buffer.start_virt_address + g_vcpus[core].ept_pte_buffer.size)
+	UINT64 shadow_page = (UINT64) InterlockedExchangeAdd64((LONG64*) &g_vcpus[processor_data->core_index].ept_pte_buffer.curr_virt_address, PAGE_SIZE);
+	if (shadow_page >= g_vcpus[processor_data->core_index].ept_pte_buffer.start_virt_address + g_vcpus[processor_data->core_index].ept_pte_buffer.size)
 	{
 		DbgPrint("exhausted PT pool, cannot allocate shadow page %d\n", pt_idx); // UNSAFE in VMX Root
 		return;
 	}
 
 	UINT64 page_aligned_target = virt_target_address & ~0xFFFull;
-	if (!read_virt(page_aligned_target, cr3, shadow_page, PAGE_SIZE, core))
+	if (!read_virt(page_aligned_target, cr3, shadow_page, PAGE_SIZE, processor_data->core_index))
 	{
 		DbgPrint("couldnt read the target page, is the memory paged?\n"); // UNSAFE in VMX Root
 		return;
@@ -435,7 +447,7 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 		stolen_length += hs.len;
 	}
 
-	if (!write_virt(tramp_buffer, cr3, shadow_func_ptr, stolen_length, core))
+	if (!write_virt(tramp_buffer, cr3, shadow_func_ptr, stolen_length, processor_data->core_index))
 	{
 		DbgPrint("couldnt write to trampoline, is the buffer paged?\n");
 		return;
@@ -444,7 +456,7 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 	UINT64 return_address = virt_target_address + stolen_length;
 	UINT8 jmp_back_stub[] = { 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	*(UINT64*) (&jmp_back_stub[6]) = return_address;
-	if (!write_virt(tramp_buffer + stolen_length, cr3, (UINT64) jmp_back_stub, sizeof(jmp_back_stub), core))
+	if (!write_virt(tramp_buffer + stolen_length, cr3, (UINT64) jmp_back_stub, sizeof(jmp_back_stub), processor_data->core_index))
 	{
 		DbgPrint("couldn't write jump back to the trampoline buffer!\n");
 		return;
@@ -454,11 +466,14 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 	*(UINT64*) (&hook_jmp_stub[6]) = destination;
 	memcpy((PVOID) shadow_func_ptr, hook_jmp_stub, sizeof(hook_jmp_stub));
 
-	UINT64 offset = shadow_page - g_vcpus[core].ept_pte_buffer.start_virt_address;
-	UINT64 shadow_page_phys = g_vcpus[core].ept_pte_buffer.start_phys_address + offset;
+	UINT64 offset = shadow_page - g_vcpus[processor_data->core_index].ept_pte_buffer.start_virt_address;
+	UINT64 shadow_page_phys = g_vcpus[processor_data->core_index].ept_pte_buffer.start_phys_address + offset;
 
-	insert_in_hashmap(g_vcpus[core].hook_map, pte->fields.pfn, shadow_page_phys / PAGE_SIZE);
-	insert_in_hashmap(g_vcpus[core].hook_um_map, pte->fields.pfn, cr3);
+	EPT_HOOK hook = {
+		cr3,
+		shadow_page_phys / PAGE_SIZE
+	};
+	insert_in_hashmap(g_vcpus[processor_data->core_index].hook_map, pte->fields.pfn, hook);
 
 	pte->fields.execute_access = 0; // arm the hook
 }
@@ -501,7 +516,6 @@ void free_all_core_eptp()
 bool free_core_hashmaps(int core)
 {
 	ExFreePool(g_vcpus[core].hook_map->buffer);
-	ExFreePool(g_vcpus[core].hook_um_map->buffer);
 
 	return true;
 }

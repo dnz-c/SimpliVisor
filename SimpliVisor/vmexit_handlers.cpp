@@ -98,7 +98,7 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
         __vmx_vmread(GUEST_CR3, &cr3);
         cr3 &= ~0xFFFull;
 
-        install_ept_hook(virt_target, destination, tramp_buffer, ctx->host_data->core_index, cr3);
+        install_ept_hook(virt_target, destination, tramp_buffer, ctx->host_data, cr3);
 
         ctx->invalidate_tlb = true;
     }
@@ -217,14 +217,9 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
 
     if (qualification.fields.execute_access)
     {
-        // check if this is a function we have a hook on / want to hide
-        UINT64 shadow_pfn = 0;
-        if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_map, pte->fields.pfn, &shadow_pfn))
-            return;
-
-        // check if this process is allowed to see the hook
-        UINT64 allowed_cr3 = 0;
-        if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_um_map, pte->fields.pfn, &allowed_cr3))
+        // check if this is a function we have a hook on / want to hide and if this process is allowed to see the hook
+        EPT_HOOK hook = { 0 };
+        if (!get_in_hashmap(g_vcpus[ctx->host_data->core_index].hook_map, pte->fields.pfn, &hook))
             return;
 
         UINT64 original_pfn = pte->fields.pfn;
@@ -234,21 +229,21 @@ void handle_ept_violation(PEXIT_CONTEXT ctx)
         guest_cr3 &= ~0xFFFull;
 
         // our process just executed the hooked function, inject the shadow page
-        if ((allowed_cr3 & ~0xFFFull) == (guest_cr3 & ~0xFFFull))
+        if ((hook.cr3 & ~0xFFFull) == (guest_cr3 & ~0xFFFull))
         {
-            pte->fields.pfn = shadow_pfn;
+            pte->fields.pfn = hook.shadow_pfn;
+
+            g_vcpus[ctx->host_data->core_index].mtf_target_pte = pte;
+            g_vcpus[ctx->host_data->core_index].mtf_restore_pfn = original_pfn;
+
+            // enable MTF so we instantly vmexit on the next instruction
+            size_t exec_ctrl = 0;
+            __vmx_vmread(CPU_BASED_VM_EXEC_CONTROL, &exec_ctrl);
+            exec_ctrl |= CPU_BASED_MONITOR_TRAP_FLAG;
+            __vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, exec_ctrl);
         }
 
         pte->fields.execute_access = 1;
-
-        g_vcpus[ctx->host_data->core_index].mtf_target_pte = pte;
-        g_vcpus[ctx->host_data->core_index].mtf_restore_pfn = original_pfn;
-
-        // enable MTF so we instantly vmexit on the next instruction
-        size_t exec_ctrl = 0;
-        __vmx_vmread(CPU_BASED_VM_EXEC_CONTROL, &exec_ctrl);
-        exec_ctrl |= CPU_BASED_MONITOR_TRAP_FLAG;
-        __vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, exec_ctrl);
         
         ctx->invalidate_tlb = true;
         ctx->advance_rip = false;

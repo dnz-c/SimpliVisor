@@ -78,6 +78,7 @@ typedef struct _PTE
 typedef struct _HOST_PROCESSOR_DATA
 {
     UINT32 core_index;
+	UINT32 core_count;
 } HOST_PROCESSOR_DATA, * PHOST_PROCESSOR_DATA;
 
 struct VCPU
@@ -105,8 +106,7 @@ struct VCPU
     UINT64 phys_window;
 	UINT64 orig_window_pfn;
 
-	PLINEAR_64b_HASH_MAP hook_map; // stores original pfn -> shadow pfn mappings
-	PLINEAR_64b_HASH_MAP hook_um_map; // stores original pfn -> cr3 allowed to "see" the hook
+	PLINEAR_128b_HASH_MAP hook_map; // stores original pfn -> shadow pfn mappings
 };
 
 extern inline VCPU* g_vcpus = NULL;

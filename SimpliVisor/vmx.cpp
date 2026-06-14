@@ -324,11 +324,12 @@ void setup_vmcs(int core, ULONG64 rsp)
 	__vmx_vmwrite(GUEST_FS_BASE, __readmsr(FS_BASE));
 	__vmx_vmwrite(GUEST_GS_BASE, __readmsr(GS_BASE));
 
-	__vmx_vmwrite(HOST_FS_BASE, __readmsr(FS_BASE));
+	//__vmx_vmwrite(HOST_FS_BASE, __readmsr(FS_BASE));
 	__vmx_vmwrite(HOST_GS_BASE, __readmsr(GS_BASE));
 
 	// store host processor data in FS
 	g_vcpus[core].processor_data.core_index = core;
+	g_vcpus[core].processor_data.core_count = KeQueryActiveProcessorCount(NULL);
 	__vmx_vmwrite(HOST_FS_SELECTOR, 0);
 	__vmx_vmwrite(HOST_FS_BASE, (size_t) & g_vcpus[core].processor_data);
 

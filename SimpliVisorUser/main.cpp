@@ -25,32 +25,62 @@ void broadcast_hook_to_all_cores(UINT64 target_func, UINT64 payload_func, UINT64
     GetSystemInfo(&sys_info);
     DWORD num_cores = sys_info.dwNumberOfProcessors;
 
-    std::cout << "detected " << num_cores << " cores" << std::endl;
-
     HANDLE curr_thread = GetCurrentThread();
-    DWORD_PTR affinity = 0;
+    HANDLE curr_process = GetCurrentProcess();
+
+    DWORD_PTR process_affinity, system_affinity;
+    if (!GetProcessAffinityMask(curr_process, &process_affinity, &system_affinity))
+    {
+        std::cout << "failed to get process affinity!" << std::endl;
+        return;
+    }
+
+    DWORD_PTR original_affinity = 0;
 
     for (DWORD i = 0; i < num_cores; i++)
     {
         DWORD_PTR core_mask = (DWORD_PTR) 1 << i;
 
-        DWORD_PTR prev_mask = SetThreadAffinityMask(curr_thread, core_mask);
-        if (i == 0) affinity = prev_mask;
+        if ((process_affinity & core_mask) == 0)
+        {
+            std::cout << "skipping core " << i << std::endl;
+            continue;
+        }
 
-        SwitchToThread();
+        DWORD_PTR prev_mask = SetThreadAffinityMask(curr_thread, core_mask);
+        if (prev_mask == 0)
+        {
+            std::cout << "failed to set thread affinity for core " << i << " | error: " << GetLastError() << std::endl;
+            continue;
+        }
+        if (i == 0) original_affinity = prev_mask;
+
+        int timeout_counter = 0;
+        while (GetCurrentProcessorNumber() != i)
+        {
+            Sleep(1); // FORCE WAIT STATE
+
+            timeout_counter++;
+            if (timeout_counter > 100)
+            {
+                std::cout << "os refused to migrate thread to core " << i << std::endl;
+                break;
+            }
+        }
+
+        if (GetCurrentProcessorNumber() != i) continue;
 
         asm_vmcall(VMCALL_INSTALLHOOK, target_func, payload_func, tramp_buffer, 0);
 
         std::cout << "hook installed on core: " << i << std::endl;
     }
 
-    if (affinity)
+    if (original_affinity)
     {
-        SetThreadAffinityMask(curr_thread, affinity);
-        SwitchToThread();
+        SetThreadAffinityMask(curr_thread, original_affinity);
     }
 
-    std::cout << "sent hook to all cores (hopefully)" << std::endl;
+    std::cout << "Broadcast complete." << std::endl;
 }
 
 int main()
