@@ -373,18 +373,6 @@ PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical)
 	return &g_vcpus[core].pdes[pd_idx];
 }
 
-void write_absolute_jmp(UINT64 write_location, UINT64 destination_address, UINT64 pml4, UINT32 core)
-{
-	UINT8 jmp_shellcode[] = {
-		0xFF, 0x25, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-	};
-
-	*(UINT64*) (&jmp_shellcode[6]) = destination_address;
-
-	write_virt(write_location, pml4, (UINT64) jmp_shellcode, sizeof(jmp_shellcode), core);
-}
-
 void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, PHOST_PROCESSOR_DATA processor_data, UINT64 cr3)
 {
 	UINT64 phys_target_address = virt_to_phys(virt_target_address, cr3, processor_data->core_index);

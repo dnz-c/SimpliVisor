@@ -340,6 +340,8 @@ void setup_vmcs(int core, ULONG64 rsp)
 
 	__vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, adjust_controls(CPU_BASED_ACTIVATE_MSR_BITMAP | CPU_BASED_ACTIVATE_SECONDARY_CONTROLS, TRUE_MSR_SUPPORT ? IA32_VMX_TRUE_PROCBASED_CTLS : IA32_VMX_PROCBASED_CTLS));
 	__vmx_vmwrite(SECONDARY_VM_EXEC_CONTROL, adjust_controls(CPU_BASED_CTL2_RDTSCP | CPU_BASED_CTL2_ENABLE_INVPCID | CPU_BASED_CTL2_ENABLE_XSAVE_XRSTORS | CPU_BASED_CTL2_ENABLE_USER_WAIT_PAUSE | CPU_BASED_CTL2_ENABLE_EPT, IA32_VMX_PROCBASED_CTLS2));
+	
+	// used for physical signals to the CPU pins i.e. NMIs or Mouse/Keyboard interrupts
 	__vmx_vmwrite(PIN_BASED_VM_EXEC_CONTROL, adjust_controls(0, TRUE_MSR_SUPPORT ? IA32_VMX_TRUE_PINBASED_CTLS : IA32_VMX_PINBASED_CTLS));
 
 	__vmx_vmwrite(VM_EXIT_CONTROLS, adjust_controls(VM_EXIT_IA32E_MODE | VM_EXIT_SAVE_IA32_EFER, TRUE_MSR_SUPPORT ? IA32_VMX_TRUE_EXIT_CTLS : IA32_VMX_EXIT_CTLS));
@@ -385,7 +387,7 @@ void setup_vmcs(int core, ULONG64 rsp)
 	__vmx_vmwrite(HOST_RSP, g_vcpus[core].host_stack);
 	__vmx_vmwrite(HOST_RIP, (size_t) asm_vmexit_handler);
 
-	__vmx_vmwrite(GUEST_DR7, __readdr(7) | 0x400);
+	__vmx_vmwrite(GUEST_DR7, __readdr(7) | 0x400); // set reserved bit
 
 	__vmx_vmwrite(GUEST_CR3, __readcr3());
 	__vmx_vmwrite(HOST_CR3, __readcr3());
