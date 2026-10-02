@@ -137,6 +137,7 @@
     <ClInclude Include="driver.h" />
     <ClInclude Include="ept.h" />
     <ClInclude Include="hde.h" />
+    <ClInclude Include="ioctl.h" />
     <ClInclude Include="km_hashmap.hpp" />
     <ClInclude Include="memory.h" />
     <ClInclude Include="mt.h" />
