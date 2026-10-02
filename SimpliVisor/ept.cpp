@@ -378,7 +378,7 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 	UINT64 phys_target_address = virt_to_phys(virt_target_address, cr3, processor_data->core_index);
 	if (phys_target_address == 0) 
 	{
-		DbgPrint("virt_to_phys failed for address %llx\n", virt_target_address);
+		DbgPrint("virt_to_phys failed for address %llx on DTB %llx\n", virt_target_address, cr3);
 		return;
 	}
 	int pd_idx = phys_target_address / PDE_PAGE_SIZE;

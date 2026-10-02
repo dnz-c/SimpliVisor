@@ -95,6 +95,27 @@ NTSTATUS mj_device_control(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 		ExFreePool(g_vcpus);
 	}
 		break;
+	case IOCTL_INSTALL_EPT_HOOK:
+	{
+		INSTALL_EPT_HOOK_REQUEST* request = (INSTALL_EPT_HOOK_REQUEST*)Irp->AssociatedIrp.SystemBuffer;
+
+		UINT64* args = (UINT64*)ExAllocatePool(NonPagedPool, sizeof(UINT64) * 5);
+		if (!args)
+		{
+			status = STATUS_UNSUCCESSFUL;
+			break;
+		}
+		RtlSecureZeroMemory(args, sizeof(UINT64) * 5);
+		args[0] = VMCALL_REASON::INSTALL_HOOK;
+		args[1] = request->target_func;
+		args[2] = request->hook_func;
+		args[3] = request->trampoline;
+		args[4] = __readcr3() & ~0xFFFull;
+
+		// since we broadcast via dcp, there is no guarantee the processor will hold the usermode process dtb so we also need to the hypervisor to use the current dtb
+		broadcast_vmcall(args);
+	}
+		break;
 	}
 
 	Irp->IoStatus.Status = status;

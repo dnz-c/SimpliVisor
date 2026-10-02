@@ -132,6 +132,7 @@
     </MASM>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\SimpliVisor\ioctl.h" />
     <ClInclude Include="vmx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

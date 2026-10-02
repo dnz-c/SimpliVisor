@@ -93,10 +93,7 @@ void handle_vmcall(PEXIT_CONTEXT ctx)
         UINT64 virt_target = ctx->regs->rdx;
         UINT64 destination = ctx->regs->r8;
         UINT64 tramp_buffer = ctx->regs->r9;
-
-        UINT64 cr3;
-        __vmx_vmread(GUEST_CR3, &cr3);
-        cr3 &= ~0xFFFull;
+        UINT64 cr3 = ctx->regs->r10;
 
         install_ept_hook(virt_target, destination, tramp_buffer, ctx->host_data, cr3);
 

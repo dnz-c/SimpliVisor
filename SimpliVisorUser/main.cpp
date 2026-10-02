@@ -2,6 +2,8 @@
 #include <Windows.h>
 #include <intrin.h>
 
+#include "../SimpliVisor/ioctl.h"
+
 #define PAGE_SIZE 0x1000
 
 #include "vmx.h"
@@ -17,70 +19,6 @@ void target_func_hook()
 
     target_func_t o_target_func = (target_func_t) g_trampoline;
     return o_target_func();
-}
-
-void broadcast_hook_to_all_cores(UINT64 target_func, UINT64 payload_func, UINT64 tramp_buffer)
-{
-    SYSTEM_INFO sys_info;
-    GetSystemInfo(&sys_info);
-    DWORD num_cores = sys_info.dwNumberOfProcessors;
-
-    HANDLE curr_thread = GetCurrentThread();
-    HANDLE curr_process = GetCurrentProcess();
-
-    DWORD_PTR process_affinity, system_affinity;
-    if (!GetProcessAffinityMask(curr_process, &process_affinity, &system_affinity))
-    {
-        std::cout << "failed to get process affinity!" << std::endl;
-        return;
-    }
-
-    DWORD_PTR original_affinity = 0;
-
-    for (DWORD i = 0; i < num_cores; i++)
-    {
-        DWORD_PTR core_mask = (DWORD_PTR) 1 << i;
-
-        if ((process_affinity & core_mask) == 0)
-        {
-            std::cout << "skipping core " << i << std::endl;
-            continue;
-        }
-
-        DWORD_PTR prev_mask = SetThreadAffinityMask(curr_thread, core_mask);
-        if (prev_mask == 0)
-        {
-            std::cout << "failed to set thread affinity for core " << i << " | error: " << GetLastError() << std::endl;
-            continue;
-        }
-        if (i == 0) original_affinity = prev_mask;
-
-        int timeout_counter = 0;
-        while (GetCurrentProcessorNumber() != i)
-        {
-            Sleep(1); // FORCE WAIT STATE
-
-            timeout_counter++;
-            if (timeout_counter > 100)
-            {
-                std::cout << "os refused to migrate thread to core " << i << std::endl;
-                break;
-            }
-        }
-
-        if (GetCurrentProcessorNumber() != i) continue;
-
-        asm_vmcall(VMCALL_INSTALLHOOK, target_func, payload_func, tramp_buffer, 0);
-
-        std::cout << "hook installed on core: " << i << std::endl;
-    }
-
-    if (original_affinity)
-    {
-        SetThreadAffinityMask(curr_thread, original_affinity);
-    }
-
-    std::cout << "Broadcast complete." << std::endl;
 }
 
 int main()
@@ -120,6 +58,8 @@ int main()
         //return 1;
     }
 
+    DeviceIoControl(device, IOCTL_VIRTUALIZE, NULL, NULL, NULL, NULL, NULL, NULL);
+
     system("pause");
 
     __cpuid(reg, 0x40000001);
@@ -144,10 +84,16 @@ int main()
     std::cout << "Hook Payload     @ 0x" << std::hex << (UINT64) target_func_hook << std::dec << std::endl;
 
     system("pause");
-
-    broadcast_hook_to_all_cores((UINT64) g_target_func_memory, (UINT64) &target_func_hook, (UINT64) g_trampoline);
-
-    std::cout << "Hook installed on all cores! Testing execution..." << std::endl;
+    INSTALL_EPT_HOOK_REQUEST* req = (INSTALL_EPT_HOOK_REQUEST*)malloc(sizeof(INSTALL_EPT_HOOK_REQUEST));
+    if (req)
+    {
+        std::cout << "broadcasting hook to all cores\n";
+        req->hook_func = (UINT64) target_func_hook;
+        req->target_func = (UINT64) g_target_func_memory;
+        req->trampoline = (UINT64) g_trampoline;
+        DeviceIoControl(device, IOCTL_INSTALL_EPT_HOOK, (LPVOID) req, sizeof(INSTALL_EPT_HOOK_REQUEST), NULL, NULL, NULL, NULL);
+    }
+    system("pause");
 
     target_func_t isolated_func = (target_func_t) g_target_func_memory;
     for (int i = 1; i <= 3; i++)
@@ -157,6 +103,7 @@ int main()
     }
 
     system("pause");
+    DeviceIoControl(device, IOCTL_DEVIRTUALIZE, NULL, NULL, NULL, NULL, NULL, NULL);
     CloseHandle(device);
     return 0;
 }
