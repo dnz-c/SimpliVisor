@@ -3,13 +3,13 @@
 #include <intrin.h>
 
 PVOID get_pte_for_va(UINT64 va);
-bool setup_hv_phys_window(int core); // setup a pte we can use in vmx root mode to read physical memory
-bool free_hv_phys_window(int core);
+bool setup_hv_phys_window(ULONG core); // setup a pte we can use in vmx root mode to read physical memory
+bool free_hv_phys_window(ULONG core);
 
-bool read_physical(UINT64 phys, UINT64 buf, size_t cnt, int core);
-bool write_physical(UINT64 phys, UINT64 buf, size_t cnt, int core);
-UINT64 virt_to_phys(UINT64 virt, UINT64 pml4, int core);
-bool read_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, int core);
-bool write_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, int core);
+bool read_physical(UINT64 phys, UINT64 buf, size_t cnt, ULONG core);
+bool write_physical(UINT64 phys, UINT64 buf, size_t cnt, ULONG core);
+UINT64 virt_to_phys(UINT64 virt, UINT64 pml4, ULONG core);
+bool read_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, ULONG core);
+bool write_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, ULONG core);
 
 bool test_hv_phys_window();

@@ -123,14 +123,14 @@ void init_all_core_eptp()
 	run_on_all_cores(setup_core_eptp);
 }
 
-bool setup_core_hashmaps(int core)
+bool setup_core_hashmaps(ULONG core)
 {
 	g_vcpus[core].hook_map = init_hash_map(PTES_TO_ALLOCATE);
 
 	return true;
 }
 
-bool setup_core_eptp(int core)
+bool setup_core_eptp(ULONG core)
 {
 	IA32_VMX_EPT_VPID_CAP_MSR vmx_ept_vpid_cap;
 	vmx_ept_vpid_cap.all = __readmsr(IA32_VMX_EPT_VPID_CAP);
@@ -292,7 +292,7 @@ bool setup_core_eptp(int core)
 	return true;
 }
 
-PEPT_PTE split_pde(UINT32 core, UINT64 pd_idx)
+PEPT_PTE split_pde(ULONG core, UINT64 pd_idx)
 {
 	if (pd_idx >= 512 * 512) return NULL;
 
@@ -339,7 +339,7 @@ PEPT_PTE split_pde(UINT32 core, UINT64 pd_idx)
 	return pt;
 }
 
-PEPT_PTE get_ept_pte(UINT32 core, UINT64 guest_physical)
+PEPT_PTE get_ept_pte(ULONG core, UINT64 guest_physical)
 {
 	int pd_idx = guest_physical / PDE_PAGE_SIZE;
 	int pt_idx = (guest_physical % PDE_PAGE_SIZE) / PAGE_SIZE;
@@ -359,7 +359,7 @@ PEPT_PTE get_ept_pte(UINT32 core, UINT64 guest_physical)
 	return &pt[pt_idx];
 }
 
-PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical)
+PEPT_PDE_2MB get_ept_pde(ULONG core, UINT64 guest_physical)
 {
 	int pd_idx = guest_physical / PDE_PAGE_SIZE;
 
@@ -466,7 +466,7 @@ void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tra
 	pte->fields.execute_access = 0; // arm the hook
 }
 
-void hide_page_range(UINT64 virt_address, UINT32 pages, UINT32 core, UINT64 cr3)
+void hide_page_range(UINT64 virt_address, UINT32 pages, ULONG core, UINT64 cr3)
 {
 	for (size_t i = 0; i < pages; i++)
 	{
@@ -501,14 +501,14 @@ void free_all_core_eptp()
 	run_on_all_cores(free_ept_pages);
 }
 
-bool free_core_hashmaps(int core)
+bool free_core_hashmaps(ULONG core)
 {
 	ExFreePool(g_vcpus[core].hook_map->buffer);
 
 	return true;
 }
 
-bool free_ept_pages(int core)
+bool free_ept_pages(ULONG core)
 {
 	DbgPrint("freing EPT page layers\n");
 	if (g_vcpus[core].v_ept_pml4)

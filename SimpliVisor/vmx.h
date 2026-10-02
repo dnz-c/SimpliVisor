@@ -133,7 +133,7 @@ extern "C"
     
     void asm_vmcall(UINT64 reason, UINT64 arg1, UINT64 arg2, UINT64 arg3, UINT64 arg4);
     
-    bool asm_virtualize_core(int core);
+    bool asm_virtualize_core(ULONG core);
     void asm_vmx_restore_state(void);
     void asm_vmexit_handler(void);
 
@@ -166,20 +166,20 @@ void init_vmexit_dispatch_table();
 void allocate_vmx_regions();
 void free_vmx_regions();
 
-bool reserve_vmxon_region(int core);
-bool reserve_vmcs_region(int core);
-bool reserve_msr_bitmap_region(int core);
+bool reserve_vmxon_region(ULONG core);
+bool reserve_vmcs_region(ULONG core);
+bool reserve_msr_bitmap_region(ULONG core);
 
-bool free_vmxon_region(int core);
-bool free_vmcs_region(int core);
-bool free_msr_bitmap_region(int core);
+bool free_vmxon_region(ULONG core);
+bool free_vmcs_region(ULONG core);
+bool free_msr_bitmap_region(ULONG core);
 
-extern "C" bool enter_vmx_operation(int core, ULONG64 rsp);
-bool exit_vmx_operation(int core);
+extern "C" bool enter_vmx_operation(ULONG core, ULONG64 rsp);
+bool exit_vmx_operation(ULONG core);
 
 bool get_segment_descriptor(IN PSEGMENT_SELECTOR segment_selector, IN USHORT selector, IN void* gdt_base);
 void fill_guest_selector_data(PVOID gdt_base, ULONG segreg, USHORT selector);
 
-void setup_vmcs(int core, ULONG64 rsp);
+void setup_vmcs(ULONG core, ULONG64 rsp);
 
 extern "C" bool vmexit_handler(PGUEST_REGS regs);

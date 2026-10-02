@@ -45,7 +45,7 @@ void free_vmx_regions()
 	run_on_all_cores(free_msr_bitmap_region);
 }
 
-bool reserve_vmxon_region(int core)
+bool reserve_vmxon_region(ULONG core)
 {
 	KIRQL irql = KeGetCurrentIrql();
 	if (irql > DISPATCH_LEVEL)
@@ -77,7 +77,7 @@ bool reserve_vmxon_region(int core)
 	return TRUE;
 }
 
-bool reserve_vmcs_region(int core)
+bool reserve_vmcs_region(ULONG core)
 {
 	KIRQL irql = KeGetCurrentIrql();
 	if (irql > DISPATCH_LEVEL)
@@ -109,7 +109,7 @@ bool reserve_vmcs_region(int core)
 	return TRUE;
 }
 
-bool reserve_msr_bitmap_region(int core)
+bool reserve_msr_bitmap_region(ULONG core)
 {
 	KIRQL irql = KeGetCurrentIrql();
 	if (irql > DISPATCH_LEVEL)
@@ -133,28 +133,28 @@ bool reserve_msr_bitmap_region(int core)
 	return TRUE;
 }
 
-bool free_vmxon_region(int core)
+bool free_vmxon_region(ULONG core)
 {
 	DbgPrint("Freeing vmxon region...\n");
 	MmFreeContiguousMemory(g_vcpus[core].v_vmxon_region);
 	return TRUE;
 }
 
-bool free_vmcs_region(int core)
+bool free_vmcs_region(ULONG core)
 {
 	DbgPrint("Freeing vmcs region...\n");
 	MmFreeContiguousMemory(g_vcpus[core].v_vmcs_region);
 	return TRUE;
 }
 
-bool free_msr_bitmap_region(int core)
+bool free_msr_bitmap_region(ULONG core)
 {
 	DbgPrint("Freeing msr_bitmap region...\n");
 	MmFreeContiguousMemory(g_vcpus[core].v_msr_bitmap);
 	return TRUE;
 }
 
-bool enter_vmx_operation(int core, ULONG64 rsp)
+bool enter_vmx_operation(ULONG core, ULONG64 rsp)
 {
 	DbgPrint("Guest RSP: %#x\n", rsp);
 
@@ -198,7 +198,7 @@ bool enter_vmx_operation(int core, ULONG64 rsp)
 	return TRUE;
 }
 
-bool exit_vmx_operation(int core)
+bool exit_vmx_operation(ULONG core)
 {
 	asm_vmcall(VMCALL_REASON::EXIT_VM, 0, 0, 0, 0);
 	DbgPrint("__vmx_off succeded on core: %ull\n", core);
@@ -282,7 +282,7 @@ ULONG adjust_controls(ULONG ctl, ULONG msr)
 	return ctl;
 }
 
-void setup_vmcs(int core, ULONG64 rsp)
+void setup_vmcs(ULONG core, ULONG64 rsp)
 {
 	__vmx_vmwrite(EPT_POINTER, g_vcpus[core].eptp.all);
 

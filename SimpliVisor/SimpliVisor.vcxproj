@@ -139,6 +139,7 @@
     <ClInclude Include="hde.h" />
     <ClInclude Include="km_hashmap.hpp" />
     <ClInclude Include="memory.h" />
+    <ClInclude Include="mt.h" />
     <ClInclude Include="vmcs.h" />
     <ClInclude Include="vmexit_handlers.h" />
     <ClInclude Include="vmx.h" />

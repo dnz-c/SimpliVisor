@@ -5,36 +5,6 @@
 
 #include "memory.h"
 
-void run_on_all_cores(function_t func)
-{
-	KAFFINITY AffinityMask;
-	for (size_t i = 0; i < KeQueryActiveProcessorCount(NULL); i++)
-	{
-		AffinityMask = int_power(2, i);
-		KeSetSystemAffinityThread(AffinityMask);
-
-		DbgPrint("=====================================================\n");
-		DbgPrint("Current thread is executing in %d th logical processor.\n", i);
-
-		// run code here
-		func(i);
-	}
-}
-
-void run_on_single_core(function_t func, int core)
-{
-	KAFFINITY AffinityMask;
-
-	AffinityMask = int_power(2, core);
-	KeSetSystemAffinityThread(AffinityMask);
-
-	DbgPrint("=====================================================\n");
-	DbgPrint("Current thread is executing in %d th logical processor.\n", core);
-
-	// run code here
-	func(core);
-}
-
 NTSTATUS mj_create(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 {
 	UNREFERENCED_PARAMETER(DeviceObject);

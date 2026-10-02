@@ -289,19 +289,19 @@ void populate_mtrr_regions();
 UINT8 get_fixed_mtrr_type(UINT64 physical_address);
 
 void init_all_core_eptp();
-bool setup_core_hashmaps(int core);
-bool setup_core_eptp(int core);
+bool setup_core_hashmaps(ULONG core);
+bool setup_core_eptp(ULONG core);
 
 // splits a 2mb large page into 512 4kb pages keeping the same access rights, returns the new PT
-PEPT_PTE split_pde(UINT32 core, UINT64 pd_idx);
+PEPT_PTE split_pde(ULONG core, UINT64 pd_idx);
 // will return NULL if the PDE has not been split
-PEPT_PTE get_ept_pte(UINT32 core, UINT64 guest_physical);
+PEPT_PTE get_ept_pte(ULONG core, UINT64 guest_physical);
 // will return NULL if the PDE has been split
-PEPT_PDE_2MB get_ept_pde(UINT32 core, UINT64 guest_physical);
+PEPT_PDE_2MB get_ept_pde(ULONG core, UINT64 guest_physical);
 
 void install_ept_hook(UINT64 virt_target_address, UINT64 destination, UINT64 tramp_buffer, PHOST_PROCESSOR_DATA processor_data, UINT64 cr3);
-void hide_page_range(UINT64 virt_address, UINT32 pages, UINT32 core, UINT64 cr3); // redirects read to said virt_address to an empty page
+void hide_page_range(UINT64 virt_address, UINT32 pages, ULONG core, UINT64 cr3); // redirects read to said virt_address to an empty page
 
 void free_all_core_eptp();
-bool free_core_hashmaps(int core);
-bool free_ept_pages(int core);
+bool free_core_hashmaps(ULONG core);
+bool free_ept_pages(ULONG core);

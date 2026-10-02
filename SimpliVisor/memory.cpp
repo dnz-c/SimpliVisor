@@ -36,7 +36,7 @@ PVOID get_pte_for_va(UINT64 va)
 	return (PPTE) &pt[pt_idx];
 }
 
-bool setup_hv_phys_window(int core)
+bool setup_hv_phys_window(ULONG core)
 {
 	PHYSICAL_ADDRESS max_phys = { 0 };
 	max_phys.QuadPart = MAXULONG64;
@@ -64,7 +64,7 @@ bool setup_hv_phys_window(int core)
 	return true;
 }
 
-bool free_hv_phys_window(int core)
+bool free_hv_phys_window(ULONG core)
 {
 	g_vcpus[core].phys_pte->PageFrameNumber = g_vcpus[core].orig_window_pfn;
 	__invlpg((PVOID) g_vcpus[core].phys_window);
@@ -72,7 +72,7 @@ bool free_hv_phys_window(int core)
 	return true;
 }
 
-bool read_physical(UINT64 phys, UINT64 buf, size_t cnt, int core)
+bool read_physical(UINT64 phys, UINT64 buf, size_t cnt, ULONG core)
 {
 	UINT64 pfn = phys / PAGE_SIZE;
 	g_vcpus[core].phys_pte->PageFrameNumber = pfn;
@@ -84,7 +84,7 @@ bool read_physical(UINT64 phys, UINT64 buf, size_t cnt, int core)
 	return true;
 }
 
-bool write_physical(UINT64 phys, UINT64 buf, size_t cnt, int core)
+bool write_physical(UINT64 phys, UINT64 buf, size_t cnt, ULONG core)
 {
 	UINT64 pfn = phys / PAGE_SIZE;
 	g_vcpus[core].phys_pte->PageFrameNumber = pfn;
@@ -96,7 +96,7 @@ bool write_physical(UINT64 phys, UINT64 buf, size_t cnt, int core)
 	return true;
 }
 
-UINT64 virt_to_phys(UINT64 virt, UINT64 pml4, int core)
+UINT64 virt_to_phys(UINT64 virt, UINT64 pml4, ULONG core)
 {
 	unsigned short PML4 = (unsigned short) ((virt >> 39) & 0x1FF);
 	UINT64 PML4E = 0;
@@ -127,7 +127,7 @@ UINT64 virt_to_phys(UINT64 virt, UINT64 pml4, int core)
 	return (PTE & 0xFFFFFFFFFF000) + (virt & 0xFFF);
 }
 
-bool read_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, int core)
+bool read_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, ULONG core)
 {
 	UINT64 pa = virt_to_phys(virt, pml4, core);
 	if (!pa) return false;
@@ -135,7 +135,7 @@ bool read_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, int core)
 	return read_physical(pa, buf, cnt, core);
 }
 
-bool write_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, int core)
+bool write_virt(UINT64 virt, UINT64 pml4, UINT64 buf, size_t cnt, ULONG core)
 {
 	UINT64 pa = virt_to_phys(virt, pml4, core);
 	if (!pa) return false;

@@ -5,6 +5,7 @@
 #include <intrin.h>
 #include <cmath>
 #include "ept.h"
+#include "mt.h"
 
 __forceinline ULONG64 int_power(ULONG64 base, ULONG64 exp) {
     ULONG64 result = 1;
@@ -20,10 +21,6 @@ __forceinline ULONG64 int_power(ULONG64 base, ULONG64 exp) {
 
 inline UNICODE_STRING DEVICE_NAME = RTL_CONSTANT_STRING(L"\\Device\\SimpliVisor");
 inline UNICODE_STRING DEVICE_SYMBOLIC_NAME = RTL_CONSTANT_STRING(L"\\??\\SimpliVisorLink");
-
-using function_t = bool(*)(int);
-void run_on_all_cores(function_t func);
-void run_on_single_core(function_t func, int core);
 
 typedef struct _PML4E
 {
@@ -77,8 +74,8 @@ typedef struct _PTE
 
 typedef struct _HOST_PROCESSOR_DATA
 {
-    UINT32 core_index;
-	UINT32 core_count;
+	ULONG core_index;
+	ULONG core_count;
 } HOST_PROCESSOR_DATA, * PHOST_PROCESSOR_DATA;
 
 struct VCPU
